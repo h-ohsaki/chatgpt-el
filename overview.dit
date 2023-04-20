@@ -1,0 +1,24 @@
+
+
+
+
+                                                                        
+              Emacs                                                  Chromium/Chrome   
+     +----------------------+   sending process               +--------------------------+
+     | hello                |                                 | ChatGPT                  |
+     |                      | send query to STDOUT            |                          |
+     |                      +---+                             | how can I help you?      |
+     |                      |   |                             |                          |
+     +----------------------+   |                             |                          |
+     | how can I help you?  |   |                             |     +--------------+     |
+     |                      |   |        chatgpt              |     | hello        |     |
+     |                      |   |     (Node.js script)        |     +--------------+     |
+     +----------------------+   |    +---------------+        +--------------------------+
+               ^                +--->| - talk CDP    |    localhost:9000    ^ 
+               |                     | - parse HTML  |                      |  
+               +---------------------| - watch reply |<---------------------+                  
+         receive reply from STDIN    |               |         CDP (Chromium DevTools Protocol)
+                                     +---------------+                     
+          receiving process                                                
+                                                                           
+       
