@@ -1,0 +1,118 @@
+#!/usr/bin/env node
+
+// https://pptr.dev/
+const readline = require('readline');
+const puppeteer = require('puppeteer');
+
+// For debugging.
+function die (msg='aborted') {
+    console.log('** ', msg);
+    process.exit(1);
+}
+    
+async function current_page () {
+    // FIXME: Port number should be configurable.
+    const browser = await puppeteer.connect({browserURL: 'http://localhost:9000'});
+    // Find the page in the first tab.
+    const pages = await browser.pages();
+    let page = pages[0];
+    // Open ChatGPT if not already visiting.
+    const url = page.url();
+    if (url.indexOf('chat.openai.com') < 0) {
+	await page.goto('https://chat.openai.com/');
+	const text = await page.waitForSelector('textarea');
+    }
+    return page;
+}
+
+async function extract_reply (page) {
+    // Note: All replies are in DIV tags with markdown class.
+    const elems = await page.$$('div.markdown');
+    const elem = elems[elems.length - 1];
+    // Replies might be empty.
+    if (!elem)
+	return '';
+    const html = await page.evaluate(e => e.innerHTML, elem);
+    return html;
+}
+
+function html2txt (html) {
+    // Format HTML to plain text.
+    let text = html.replaceAll(/\u200b/g, '');
+    text = text.replaceAll(/<button.*?<\/button>/g, ' ');
+    text = text.replaceAll(/<li>/g, '\n- ');
+    text = text.replaceAll(/<\/p>/g, '\n\n');
+    text = text.replaceAll(/<[^>]+?>/g, '');
+    text = text.trim();
+    return text;
+}
+    
+async function is_finished (page) {
+    // Note: This code assumes that `Regenerate response' appers once
+    // the reply is fully displayed.
+    const main = await page.$('main');
+    const html = await page.evaluate(b => b.innerHTML, main);
+    return html.includes('Regenerate response');
+}
+
+async function sleep (ms) {
+    // Sleep for MS milliseconds.
+    await new Promise(r => setTimeout(r, ms));
+}    
+
+async function send (buf) {
+    // Fill the textarea with string BUF and submit the form.
+    const page = await current_page();
+    const text = await page.$('textarea');
+    await text.type(buf);
+    await text.press('Enter');
+}
+
+async function recv () {
+    const page = await current_page();
+    let last_text = '';
+    while (true) {
+	const html = await extract_reply(page);
+	// Quit immediately if there is no reply.
+	if (!html)
+	    break;
+	const text = html2txt(html);
+	// Detect the difference (i.e., update) since the last display.
+	const diff = text.substring(last_text.length);
+	last_text = text;
+	process.stdout.write(diff);
+	if (await is_finished(page))
+	    break;
+	sleep(200);
+    }
+}
+
+// argv[2] is the first user-specified argument.
+mode = process.argv[2];
+
+// Send mode.
+if (mode == '-s') {
+    // Read lines from STDIN.
+    const rl = readline.createInterface({
+	input: process.stdin,
+	output: process.stdout
+    });
+    let buf = '';
+    rl.on('line', function (line) {
+	buf += line + '\n';
+    });
+    rl.on('close', function() {
+	(async () => {
+	    await send(buf);
+	    process.exit(0);
+	})();
+    });
+}
+
+// Receive mode.
+if (mode == '-r') {
+    (async () => {
+	await recv();
+	process.exit(0);
+    })();
+}
