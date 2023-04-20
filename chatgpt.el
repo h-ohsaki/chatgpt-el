@@ -51,8 +51,8 @@
     (when prefix
       (insert prefix "\n"))
     (insert str)
-    (goto-char (point-min))
     ;; FIXME: Should preserve all newlines.
+    (goto-char (point-min))
     (while (search-forward "\n" nil t)
       (replace-match " "))
     ;; Provide chromium with the query string.
@@ -131,8 +131,7 @@ from ChatGPT."
 	(setq chatgpt--timer-count 0))
       ;; Schedule next event if it seems reply is updating.
       (if (< chatgpt--timer-count 10)
-	  (chatgpt--sched-timer-event)
-	(insert "\n----")))))
+	  (chatgpt--sched-timer-event)))))
 
 ;; (chatgpt--sched-timer-event)
 (defun chatgpt--sched-timer-event ()
