@@ -2,7 +2,7 @@
 
 chatgpt-el - access ChatGTP from Emacs without OpenAI API
 
-![video](https://github.com/h-ohsaki/chatgpt-el/blob/master/screenshot/video.gif)
+![video](screenshot/video.gif)
 
 # DESCRIPTION
 
@@ -31,6 +31,9 @@ it requires CDP-enabled Chromium/Chrom browser is running.
 Chromium/Chrome using the Node.js script called `chatgpt`, which is
 built on Puppeteer library (https://pptr.dev/).  Therefore, your
 Chromium/Chrom must accept CDP connections from `chatgpt` script.
+
+![overview](overview.png)
+
 
 Note that the implementation of **chatgpt** script depends on the
 internal structure of the HTML file returned by the ChatGPT server.
