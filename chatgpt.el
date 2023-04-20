@@ -112,11 +112,8 @@ it as a string."
   "At the current point, insert the response for the last query
 from ChatGPT."
   (interactive)
-  (let ((buf (get-buffer-create chatgpt-buffer-name))
-	str)
-    (with-current-buffer buf
-      (setq str (buffer-string)))
-    (insert "A. " str)))
+  (let ((reply (chatgpt-parse-reply)))
+    (insert reply)))
 
 ;; (chatgpt--timer-event)
 (defun chatgpt--timer-event ()
@@ -125,11 +122,10 @@ from ChatGPT."
     (with-current-buffer buf
       (cond ((string= chatgpt--last-reply reply) ;; No update.
 	     (setq chatgpt--timer-count (1+ chatgpt--timer-count))
-	     ;; Stop the reply monitor after no update for 10 seconds.
-	     (when (> chatgpt--timer-count 10)
+	     ;; Stop the reply monitor after no update for 5 seconds.
+	     (when (> chatgpt--timer-count 50)
 	       (chatgpt--cancel-timer-event)))
 	    (t ;; Updated.
-	     (visual-line-mode 1)
 	     (erase-buffer)
 	     (insert reply)
 	     (setq chatgpt--last-reply reply)
@@ -142,9 +138,10 @@ from ChatGPT."
       ;; Do not create a timer if already present.
       nil
     (setq chatgpt--timer (run-with-timer
-			   1 1 'chatgpt--timer-event))
+			   1 .5 'chatgpt--timer-event))
     (setq chatgpt--timer-count 0)))
 
+;; (chatgpt--cancel-timer-event)
 (defun chatgpt--cancel-timer-event ()
   (when chatgpt--timer
     (cancel-timer chatgpt--timer)
