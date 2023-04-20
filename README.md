@@ -54,13 +54,14 @@ modifty **chatgpt** according to your einvironment.
 > cd ../chatgpt-el
 > sudo intall -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
 > sudo intall -m 755 chatgpt ../getting-started-with-cdp.git
-> cat <<EOF
+> cat <<EOF >>~/.emacs
 ;; chatgpt-el
 (autoload 'chatgpt-send "chatgpt" nil t)
 (autoload 'chatgpt-display-reply "chatgpt" nil t)
 (global-set-key "\C-cq" 'chatgpt-send-region)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
 (setq chatgpt-prog "../path/to/getting-started-with-cdp.git/chatgpt")
+EOF
 ```
 
 You can place `chatgpt` program anywhere in your system, but several
