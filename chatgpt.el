@@ -18,7 +18,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-(defvar chatgpt-prog "~/src/chatgpt/chatgpt"
+(defvar chatgpt-prog "~/src/chatgpt-el/chatgpt"
   "The name of the program communicating with the Chromium using
   the CDP protocol.")
 
@@ -113,4 +113,4 @@ from ChatGPT."
 	str)
     (with-current-buffer buf
       (setq str (buffer-string)))
-    (insert "→ " str)))
+    (insert "A. " str)))
