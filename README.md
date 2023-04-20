@@ -140,3 +140,9 @@ Hello! How can I assist you today?
 
 This will show the reply from ChatGPT, which must be equivalent to
 that shown in Chromium/Chrome.
+
+# FOR QUTEBROWSER USERS
+
+If you are a fan of qutebrowser instead of Chromium/Chrome browser,
+you can use **qutechat** (https://github.com/h-ohsaki/qutechat), a
+qutebrowser-version of **chatgpt-el**.
