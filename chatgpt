@@ -55,9 +55,9 @@ async function is_finished (page) {
     return html.includes('Regenerate response');
 }
 
-async function sleep (ms) {
+function sleep (ms) {
     // Sleep for MS milliseconds.
-    await new Promise(r => setTimeout(r, ms));
+    return new Promise(r => setTimeout(r, ms));
 }    
 
 async function send (buf) {
@@ -83,7 +83,7 @@ async function recv () {
 	process.stdout.write(diff);
 	if (await is_finished(page))
 	    break;
-	sleep(200);
+	await sleep(500);
     }
 }
 
