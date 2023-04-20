@@ -38,28 +38,19 @@ async function extract_reply (page) {
 
 function html2txt (html) {
     // Format HTML to plain text.
-    let text = html.replaceAll(/\u200b/g, '');
-    text = text.replaceAll(/<button.*?<\/button>/g, ' ');
-    text = text.replaceAll(/<li>/g, '\n- ');
-    text = text.replaceAll(/<\/p>/g, '\n\n');
-    text = text.replaceAll(/<[^>]+?>/g, '');
+    let text = html.replaceAll(/<\/?code>/g, '`');
+    text = text.replaceAll(/<\/?p>/g, '\n');
+    text = text.replaceAll(/<li>/g, '- ');
+    text = text.replaceAll(/<\/li>/g, '\n');
+    text = text.replaceAll(/<\/?pre>/g, '\n');
+    text = text.replaceAll(/<\/?ul>/g, '\n');
+    text = text.replaceAll(/<button.*?<\/button>/g, '');
+    text = text.replaceAll(/<\/?.+?>/g, '');
+    text = text.replaceAll(/\n{3,}/g, '\n\n');
     text = text.trim();
     return text;
 }
     
-async function is_finished (page) {
-    // Note: This code assumes that `Regenerate response' appers once
-    // the reply is fully displayed.
-    const main = await page.$('main');
-    const html = await page.evaluate(b => b.innerHTML, main);
-    return html.includes('Regenerate response');
-}
-
-function sleep (ms) {
-    // Sleep for MS milliseconds.
-    return new Promise(r => setTimeout(r, ms));
-}    
-
 async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
     const page = await current_page();
@@ -68,27 +59,20 @@ async function send (buf) {
     await text.press('Enter');
 }
 
-async function recv () {
+async function recv (debug) {
     const page = await current_page();
-    let last_text = '';
-    while (true) {
-	const html = await extract_reply(page);
-	// Quit immediately if there is no reply.
-	if (!html)
-	    break;
-	const text = html2txt(html);
-	// Detect the difference (i.e., update) since the last display.
-	const diff = text.substring(last_text.length);
-	last_text = text;
-	process.stdout.write(diff);
-	if (await is_finished(page))
-	    break;
-	await sleep(500);
-    }
+    const html = await extract_reply(page);
+    if (!html)
+	return;
+    let text = html2txt(html);
+    if (debug)
+	text = html;
+    process.stdout.write(text);
 }
 
 // argv[2] is the first user-specified argument.
-mode = process.argv[2];
+const mode = process.argv[2];
+const debug = (process.argv.length >= 4);
 
 // Send mode.
 if (mode == '-s') {
@@ -112,7 +96,7 @@ if (mode == '-s') {
 // Receive mode.
 if (mode == '-r') {
     (async () => {
-	await recv();
+	await recv(debug);
 	process.exit(0);
     })();
 }
