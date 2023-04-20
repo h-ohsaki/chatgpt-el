@@ -94,6 +94,7 @@ the mark is active, send the hlghlighted region as a query."
     (delete-other-windows)
     (split-window)
     (set-window-buffer (next-window) buf)
+    (setq chatgpt--timer-count 0)
     (chatgpt--sched-timer-event)))
 
 ;; (chatgpt--parse-reply)
@@ -112,7 +113,7 @@ it as a string."
   "At the current point, insert the response for the last query
 from ChatGPT."
   (interactive)
-  (let ((reply (chatgpt-parse-reply)))
+  (let ((reply (chatgpt--parse-reply)))
     (insert reply)))
 
 ;; (chatgpt--timer-event)
@@ -120,29 +121,19 @@ from ChatGPT."
   (let ((buf (get-buffer-create chatgpt-buffer-name))
 	(reply (chatgpt--parse-reply)))
     (with-current-buffer buf
-      (cond ((string= chatgpt--last-reply reply) ;; No update.
-	     (setq chatgpt--timer-count (1+ chatgpt--timer-count))
-	     ;; Stop the reply monitor after no update for 5 seconds.
-	     (when (> chatgpt--timer-count 50)
-	       (chatgpt--cancel-timer-event)))
-	    (t ;; Updated.
-	     (erase-buffer)
-	     (insert reply)
-	     (setq chatgpt--last-reply reply)
-	     (setq chatgpt--timer-count 0))))))	  
+      (if (string= chatgpt--last-reply reply) 
+	  ;; No update.
+	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
+	;; Updated.
+	(erase-buffer)
+	(insert reply)
+	(setq chatgpt--last-reply reply)
+	(setq chatgpt--timer-count 0))
+      ;; Schedule next event if it seems reply is updating.
+      (if (< chatgpt--timer-count 10)
+	  (chatgpt--sched-timer-event)
+	(insert "\n----")))))
 
 ;; (chatgpt--sched-timer-event)
 (defun chatgpt--sched-timer-event ()
-  (if (and chatgpt--timer
-	   (memq chatgpt--timer timer-list))
-      ;; Do not create a timer if already present.
-      nil
-    (setq chatgpt--timer (run-with-timer
-			   1 .5 'chatgpt--timer-event))
-    (setq chatgpt--timer-count 0)))
-
-;; (chatgpt--cancel-timer-event)
-(defun chatgpt--cancel-timer-event ()
-  (when chatgpt--timer
-    (cancel-timer chatgpt--timer)
-    (setq chatgpt--timer nil)))
+  (run-with-timer .25 nil 'chatgpt--timer-event))
