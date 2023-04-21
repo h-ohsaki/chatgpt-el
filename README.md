@@ -34,7 +34,6 @@ Chromium/Chrom must accept CDP connections from `chatgpt` script.
 
 ![overview](overview.png)
 
-
 Note that the implementation of **chatgpt** script depends on the
 internal structure of the HTML file returned by the ChatGPT server.
 If **chatgpt** does not work in your environment, you may need to
