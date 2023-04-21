@@ -3,6 +3,7 @@
 // https://pptr.dev/
 const readline = require('readline');
 const puppeteer = require('puppeteer');
+const { convert } = require('html-to-text');
 
 // For debugging.
 function die (msg='aborted') {
@@ -35,21 +36,6 @@ async function extract_reply (page) {
     const html = await page.evaluate(e => e.innerHTML, elem);
     return html;
 }
-
-function html2txt (html) {
-    // Format HTML to plain text.
-    let text = html.replaceAll(/<\/?code>/g, '`');
-    text = text.replaceAll(/<\/?p>/g, '\n');
-    text = text.replaceAll(/<li>/g, '- ');
-    text = text.replaceAll(/<\/li>/g, '\n');
-    text = text.replaceAll(/<\/?pre>/g, '\n');
-    text = text.replaceAll(/<\/?ul>/g, '\n');
-    text = text.replaceAll(/<button.*?<\/button>/g, '');
-    text = text.replaceAll(/<\/?.+?>/g, '');
-    text = text.replaceAll(/\n{3,}/g, '\n\n');
-    text = text.trim();
-    return text;
-}
     
 async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
@@ -64,7 +50,7 @@ async function recv (debug) {
     const html = await extract_reply(page);
     if (!html)
 	return;
-    let text = html2txt(html);
+    let text = convert(html, {});
     if (debug)
 	text = html;
     process.stdout.write(text);
