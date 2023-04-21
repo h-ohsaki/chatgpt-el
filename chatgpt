@@ -37,6 +37,19 @@ async function extract_reply (page) {
     return html;
 }
     
+async function is_finished (page) {
+    // Note: This code assumes that `Regenerate response' appers once
+    // the reply is fully displayed.
+    const main = await page.$('main');
+    const html = await page.evaluate(b => b.innerHTML, main);
+    return html.includes('Regenerate response');
+}
+
+function sleep (ms) {
+    // Sleep for MS milliseconds.
+    return new Promise(r => setTimeout(r, ms));
+}
+
 async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
     const page = await current_page();
@@ -48,12 +61,26 @@ async function send (buf) {
 async function recv (debug) {
     const page = await current_page();
     const html = await extract_reply(page);
-    if (!html)
-	return;
-    let text = convert(html, {});
-    if (debug)
-	text = html;
-    process.stdout.write(text);
+    let last_text = '';
+    while (true) {
+        const html = await extract_reply(page);
+        // Quit immediately if there is no reply.
+        if (!html)
+            break;
+        let text = convert(html, {
+	    preserveNewlines: true,
+	    wordwrap: false,
+	});
+	if (debug)
+	    text = html
+        // Detect the difference (i.e., update) since the last display.
+        const diff = text.substring(last_text.length);
+        last_text = text;
+        process.stdout.write(diff);
+        if (await is_finished(page))
+            break;
+        await sleep(200);
+    }
 }
 
 // argv[2] is the first user-specified argument.
