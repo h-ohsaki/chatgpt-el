@@ -65,7 +65,7 @@
      (point))
    (save-excursion
      (forward-paragraph 1)
-     (if (looking-at "$")
+     (if (not (eobp))
 	 (forward-char -1))
      (point))))
 
@@ -88,6 +88,30 @@ the mark is active, send the hlghlighted region as a query."
     (chatgpt-send-string query)
     (chatgpt-start-monitor query)))
 
+(defun chatgpt--fill-current-line ()
+  "Fill the current line if it is longer than `fill-column`."
+  (let ((beg (line-beginning-position))
+	(end (line-end-position)))
+  (save-excursion
+    (goto-char end)
+    (if (> (current-column) fill-column)
+	(fill-region beg end)))))
+
+(defun chatgpt--process-filter (proc str)
+  "A process filter that receives the reply stream from `chatgpt-prog`."
+  (let ((buf (get-buffer-create chatgpt-buffer-name)))
+    (with-current-buffer buf
+      (save-excursion
+	;; Insert the input at the end of the buffer.
+	(goto-char (point-max))
+	(insert str)
+	;; Fill the above three lines if they are lengthy.
+	(goto-char (point-max))
+	(forward-line -3)
+	(while (not (eobp))
+	  (chatgpt--fill-current-line)
+	  (forward-line 1))))))
+
 ;; (chatgpt-start-monitor)
 (defun chatgpt-start-monitor (query)
   "Start a monitor to watch the output (i.e., reply) from
@@ -99,6 +123,7 @@ ChatGPT."
       (erase-buffer)
       (insert "Q. " query "\n\n")
       (setq chatgpt--process (start-process "chatgpt" buf chatgpt-prog "-r"))
+      (set-process-filter chatgpt--process 'chatgpt--process-filter)
       (set-process-sentinel chatgpt--process #'ignore)
       ;;
       (delete-other-windows)
