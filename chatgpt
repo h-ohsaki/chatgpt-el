@@ -59,17 +59,23 @@ async function send (buf) {
 }
 
 function smart_diff(last_str, str) {
-    // Return the difference between LAST_STR and STR.
-    // LAST_STR is the prefix of STR, but a few characters might be different.
-    const offset = last_str.length;
-    // Use the last 8 characters as key phrase.
-    const last_part = last_str.slice(-8);
-    // Look for the key phrase at around the OFFSET position.
-    for (const delta in [0, 1, -1, -2, 2]) {
-	if (str.substring(offset + delta, 8) == last_part)
-	    return str.slice(offset)
-    }
-    return str.slice(offset)
+    let offset = last_str.length;
+    const last_phrase = last_str.slice(-4);
+    let phrase = str.slice(offset -4, offset);
+    if (last_phrase == phrase)
+	return str.slice(offset);
+    // FIXME: Need refactoring.
+    offset = last_str.length - 1;
+    phrase = str.slice(offset -4, offset);
+    if (last_phrase == phrase)
+	return str.slice(offset);
+
+    offset = last_str.length + 1;
+    phrase = str.slice(offset -4, offset);
+    if (last_phrase == phrase)
+	return str.slice(offset);
+
+    return '**' + str.slice(offset);
 }
 	
 async function recv (debug) {
@@ -77,10 +83,11 @@ async function recv (debug) {
     const html = await extract_reply(page);
     let last_text = '';
     while (true) {
-        const html = await extract_reply(page);
+        let html = await extract_reply(page);
         // Quit immediately if there is no reply.
         if (!html)
             break;
+	html = html.replaceAll(/<button.*?<\/button>/g, '');
         let text = convert(html, {
 	    preserveNewlines: true,
 	    wordwrap: false,
