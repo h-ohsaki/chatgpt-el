@@ -36,21 +36,17 @@
     (?p . "Proofread following text and summarize all suggested changes.")
     (?P . "以下の文章の誤りを直して、変更点の一覧を出力して。")))
 
-(defvar chatgpt--timer nil
-  "A timer event to retriee the response from the server.")
-
-(defvar chatgpt--timer-count nil)
+(defvar chatgpt--process nil
+  "The process for receiving the stream of response from the server.")
 
 ;; (chatgpt-send-string "which of Emacs or vi is better?")
 ;; (chatgpt-send-string "what is Emacs's interesting history?")
-(defun chatgpt-send-string (str &optional prefix)
-  "Send a query string STR to ChatGPT via chromium."
+(defun chatgpt-send-string (query)
+  "Send a query string QUERY to ChatGPT via chromium."
   (interactive)
   ;; Compose a query string in a temporary buffer.
   (with-temp-buffer
-    (when prefix
-      (insert prefix "\n"))
-    (insert str)
+    (insert query)
     ;; FIXME: Should preserve all newlines.
     (goto-char (point-min))
     (while (search-forward "\n" nil t)
@@ -58,84 +54,64 @@
     ;; Provide chromium with the query string.
     (call-process-region (point-min) (point-max) chatgpt-prog
 			 nil nil nil "-s")))
-  
-(defun chatgpt-send-region (start end &optional prefix)
-  "Send the region between START and END to ChatGPT via Chromium."
-  (interactive "r")
-  (let ((str (buffer-substring-no-properties start end)))
-    (chatgpt-send-string str prefix)))
 
 ;; (chatgpt--current-paragraph)
 (defun chatgpt--current-paragraph ()
   (buffer-substring-no-properties
    (save-excursion
      (forward-paragraph -1)
+     (if (looking-at "$")
+	 (forward-line 1))
      (point))
    (save-excursion
      (forward-paragraph 1)
+     (if (looking-at "$")
+	 (forward-char -1))
      (point))))
 
 (defun chatgpt-send (arg)
   "Send the query around the point to ChatGPT via Chromium.  If
 the mark is active, send the hlghlighted region as a query."
   (interactive "P")
-  (let* ((str (if mark-active
-		  (buffer-substring-no-properties (region-beginning) (region-end))
-		;; When mark is inactive.
-		(chatgpt--current-paragraph)))
-	 (buf (get-buffer-create chatgpt-buffer-name))
-	 prefix)
+  (let* ((query (if mark-active
+		    (buffer-substring-no-properties (region-beginning) (region-end))
+		  ;; When mark is inactive.
+		  (chatgpt--current-paragraph)))
+	 (buf (get-buffer-create chatgpt-buffer-name)))
     ;; Change behavior when prefix is provided.
     (cond ((equal arg '(16))
-	   (setq str "続き"))
+	   (setq query "続き"))
 	  (arg
 	   (let* ((ch (read-char "Prefix [w]what/[s]ummary/[j]apanese/[e]nglish/[p/P]roofread: "))
 		  (val (assoc ch chatgpt-prefix-alist)))
-	     (setq prefix (cdr val)))))
-    (chatgpt-send-string str prefix)
-    ;; Display reply buffer and start reply monitor.
-    (delete-other-windows)
-    (split-window)
-    (set-window-buffer (next-window) buf)
-    (setq chatgpt--timer-count 0)
-    (chatgpt--sched-timer-event)))
+	     (setq query (concat (cdr val) query)))))
+    (chatgpt-send-string query)
+    (chatgpt-start-monitor query)))
 
-;; (chatgpt--parse-reply)
-(defun chatgpt--parse-reply ()
-  "Check the response for the last query from ChatGPT and return
-it as a string."
+;; (chatgpt-start-monitor)
+(defun chatgpt-start-monitor (query)
+  "Start a monitor to watch the output (i.e., reply) from
+ChatGPT."
   (interactive)
-  ;; Retrieve the reply for the last query.
-  (with-temp-buffer
-    ;; FIXME: This code assumes the first line is the query.
-    (call-process chatgpt-prog nil t nil "-r")
-    (buffer-string)))
+  (let ((buf (get-buffer-create chatgpt-buffer-name)))
+    ;; Prepare and display the reply buffer.
+    (with-current-buffer buf
+      (erase-buffer)
+      (insert "Q. " query "\n\n")
+      (setq chatgpt--process (start-process "chatgpt" buf chatgpt-prog "-r"))
+      (set-process-sentinel chatgpt--process #'ignore)
+      ;;
+      (delete-other-windows)
+      (split-window)
+      (set-window-buffer (next-window) buf))))
 
 ;; (chatgpt-insert-reply)
 (defun chatgpt-insert-reply ()
   "At the current point, insert the response for the last query
 from ChatGPT."
   (interactive)
-  (let ((reply (chatgpt--parse-reply)))
-    (insert reply)))
-
-;; (chatgpt--timer-event)
-(defun chatgpt--timer-event ()
   (let ((buf (get-buffer-create chatgpt-buffer-name))
-	(reply (chatgpt--parse-reply)))
+        reply)
     (with-current-buffer buf
-      (if (string= chatgpt--last-reply reply) 
-	  ;; No update.
-	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
-	;; Updated.
-	(erase-buffer)
-	(insert reply)
-	(setq chatgpt--last-reply reply)
-	(setq chatgpt--timer-count 0))
-      ;; Schedule next event if it seems reply is updating.
-      (if (< chatgpt--timer-count 10)
-	  (chatgpt--sched-timer-event)))))
-
-;; (chatgpt--sched-timer-event)
-(defun chatgpt--sched-timer-event ()
-  (run-with-timer .25 nil 'chatgpt--timer-event))
+      (setq reply (buffer-string)))
+    (insert reply)))
