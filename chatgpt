@@ -58,6 +58,20 @@ async function send (buf) {
     await text.press('Enter');
 }
 
+function smart_diff(last_str, str) {
+    // Return the difference between LAST_STR and STR.
+    // LAST_STR is the prefix of STR, but a few characters might be different.
+    const offset = last_str.length;
+    // Use the last 8 characters as key phrase.
+    const last_part = last_str.slice(-8);
+    // Look for the key phrase at around the OFFSET position.
+    for (const delta in [0, 1, -1, -2, 2]) {
+	if (str.substring(offset + delta, 8) == last_part)
+	    return str.slice(offset)
+    }
+    return str.slice(offset)
+}
+	
 async function recv (debug) {
     const page = await current_page();
     const html = await extract_reply(page);
@@ -74,7 +88,7 @@ async function recv (debug) {
 	if (debug)
 	    text = html
         // Detect the difference (i.e., update) since the last display.
-        const diff = text.substring(last_text.length);
+        const diff = smart_diff(last_text, text);
         last_text = text;
         process.stdout.write(diff);
         if (await is_finished(page))
