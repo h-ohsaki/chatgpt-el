@@ -42,21 +42,18 @@ modifty **chatgpt** according to your einvironment.
 
 # PREREQUISITES
 
-- Chromium or Chrome browser supporting the CDP protocol.  Recent
-  Chromium/Chrome browser supports the CDP protocol by default.
-
+- Chromium or Chrome browser (or other browsers supporting the CDP protocol).
 - Node.js (https://nodejs.org/en).
+- html-to-text moudle (https://www.npmjs.com/package/html-to-text)
 
 # INSTALLATION
 
 ``` sh
-> git clone https://github.com/h-ohsaki/chatgpt-el
-> git clone https://github.com/aslushnikov/getting-started-with-cdp.git
-> cd getting-started-with-cdp
-> npm i
-> cd ../chatgpt-el
+> sudo npm i -g puppeteer
+> sudo npm i -g html-to-text
+> git clone https://github.com/h-ohsaki/chatgpt-el.git
+> cd chatgpt-el
 > sudo intall -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
-> ln -s ../getting-started-with-cdp/node_modules .
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
 (autoload 'chatgpt-send "chatgpt" nil t)
@@ -67,9 +64,9 @@ modifty **chatgpt** according to your einvironment.
 EOF
 ```
 
-You can place `chatgpt` script anywhere in your system, but several
-Node.js modules such as Puppeteer must be accessible from `chatgpt`
-program.
+You can place `chatgpt` script anywhere in your system, but Node.js
+modules such as Puppeteer and html-to-text must be accessible from
+`chatgpt` program.
 
 # USAGE
 
