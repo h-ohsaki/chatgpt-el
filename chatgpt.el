@@ -79,18 +79,21 @@
   "Send the query around the point to ChatGPT via Chromium.  If
 the mark is active, send the hlghlighted region as a query."
   (interactive "P")
-  (let (prefix str buf)
-    (when arg
-      (let* ((ch (read-char "Prefix [w]what/[s]ummary/[j]apanese/[e]nglish/[p/P]roofread: "))
-	     (val (assoc ch chatgpt-prefix-alist)))
-	(setq prefix (cdr val))))
-    (if mark-active
-	(chatgpt-send-region (region-beginning) (region-end) prefix)
-      ;; When mark is inactive.
-      (setq str (chatgpt--current-paragraph))
-      (chatgpt-send-string str prefix))
+  (let* ((str (if mark-active
+		  (buffer-substring-no-properties (region-beginning) (region-end))
+		;; When mark is inactive.
+		(chatgpt--current-paragraph)))
+	 (buf (get-buffer-create chatgpt-buffer-name))
+	 prefix)
+    ;; Change behavior when prefix is provided.
+    (cond ((equal arg '(16))
+	   (setq str "続き"))
+	  (arg
+	   (let* ((ch (read-char "Prefix [w]what/[s]ummary/[j]apanese/[e]nglish/[p/P]roofread: "))
+		  (val (assoc ch chatgpt-prefix-alist)))
+	     (setq prefix (cdr val)))))
+    (chatgpt-send-string str prefix)
     ;; Display reply buffer and start reply monitor.
-    (setq buf (get-buffer-create chatgpt-buffer-name))
     (delete-other-windows)
     (split-window)
     (set-window-buffer (next-window) buf)
