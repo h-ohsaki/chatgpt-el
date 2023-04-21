@@ -25,6 +25,10 @@
 (defvar chatgpt-buffer-name "*ChatGPT reply*"
   "The name of the buffer to display the response from ChatGPT.")
 
+(defvar chatgpt-session-file "~/.chatgpt-session.org")
+
+(defvar chatgpt-auto-fill nil)
+
 (defvar chatgpt--last-reply nil
   "The last reply returned by the server.")
 
@@ -105,12 +109,25 @@ the mark is active, send the hlghlighted region as a query."
 	;; Insert the input at the end of the buffer.
 	(goto-char (point-max))
 	(insert str)
-	;; Fill the above three lines if they are lengthy.
-	(goto-char (point-max))
-	(forward-line -3)
-	(while (not (eobp))
-	  (chatgpt--fill-current-line)
-	  (forward-line 1))))))
+	(when chatgpt-auto-fill
+	  ;; Fill the above lines if they are lengthy.
+	  (goto-char (point-max))
+	  (forward-line -3)
+	  (while (not (eobp))
+	    (chatgpt--fill-current-line)
+	    (forward-line 1)))))))
+
+(defun chatgpt--process-sentinel (proc event)
+  (when (and (string-match-p "finished" event)
+	     chatgpt-session-file)
+    (let ((buf (get-buffer-create chatgpt-buffer-name))
+	  (save-silently t))
+      (with-current-buffer buf
+	(save-excursion
+	  (goto-char (point-max))
+	  (insert "\n\n")
+	  (write-region (point-min) (point-max)
+			chatgpt-session-file 'append))))))
 
 ;; (chatgpt-start-monitor)
 (defun chatgpt-start-monitor (query)
@@ -124,7 +141,7 @@ ChatGPT."
       (insert "Q. " query "\n\n")
       (setq chatgpt--process (start-process "chatgpt" buf chatgpt-prog "-r"))
       (set-process-filter chatgpt--process 'chatgpt--process-filter)
-      (set-process-sentinel chatgpt--process #'ignore)
+      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
       ;;
       (delete-other-windows)
       (split-window)
