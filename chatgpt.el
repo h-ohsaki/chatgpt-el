@@ -125,13 +125,16 @@ and the reply is displayed in a separate buffer."
 	  (arg
 	   (setq prefix (chatgpt--read-prefix))))
     (unless query
-      (if mark-active
-	  (setq query (buffer-substring-no-properties
-		       (region-beginning) (region-end)))
-	;; When mark is inactive.
-	(let ((paragraph (string-trim
-			  (or (thing-at-point 'paragraph) ""))))
-	  (setq query (read-string "ChatGPT lookup: " paragraph)))))
+      (setq query
+	    (cond (mark-active
+		   (buffer-substring-no-properties
+		    (region-beginning) (region-end)))
+		  ((looking-at "\\w")
+		   (thing-at-point 'word))
+		  (t
+		   (string-trim 
+		    (or (thing-at-point 'paragraph) "")))))
+      (setq query (read-string "ChatGPT lookup: " query)))
     (chatgpt-send-query (concat prefix query))
     (chatgpt--start-monitor)))
 
