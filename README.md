@@ -7,37 +7,36 @@ chatgpt-el - access ChatGTP from Emacs without OpenAI API
 # DESCRIPTION
 
 **chatgpt-el** is an Emacs Lisp program designed to interactively
-access ChatGPT (https://chat.openai.com/) from Emacs.  ChatGPT can be
-easily accessed from a program using OpenAI API (e.g., using openai
-module in the Python language), but accessing ChatGPT using OpenAI API
-has several drawbacks.
+access ChatGPT (https://chat.openai.com/) from within Emacs.  While
+ChatGPT can be accessed via OpenAI API using a programming language
+like Python and its openai module, such access has several drawbacks.
 
-1. Batch processing via OpenAI API is slow; Accessing OpenAI API is
-   slow and sometimes it takes very long time.  Such slow repsonse
-   makes the experiences of accessing ChatGPT frustrating.
+1. Batch processing through OpenAI API is slow; accessing OpenAI API
+   is slow, and responses can often take an unnecessarily long
+   time. Such slow response times can make accessing ChatGPT
+   frustrating.
 
-2. You must have a non-free OpenAI account with your credit card
-   registration.  Frequently accessing ChatGPT may cost a lot, so that
-   you have to keep watching your OpenAI billing record.
+2. Accessing ChatGPT via OpenAI API requires a non-free OpenAI account
+   with credit card registration. Frequent use of ChatGPT can lead to
+   high costs and require monitoring of OpenAI billing records.
 
-**chatgpt-el** solves the above issues by accessing ChatGPT from Emacs
-without OpenAI API key.
-
-**chatgpt-el** is implemented utlizing Chromium/Chrome browser's CDP
-(Chrome DevTools Protocol)
-(https://chromedevtools.github.io/devtools-protocol/), and therefore
-it requires a CDP-enabled Chromium/Chrom browser is running.
-**chatgpt-el** operates by remotely controlling your instance of
-Chromium/Chrome using the Node.js script called `chatgpt`, which is
-built on Puppeteer library (https://pptr.dev/).  Therefore, your
-Chromium/Chrom must accept a CDP connection from `chatgpt` script.
+**chatgpt-el** solves the above issues by enabling access to ChatGPT
+within Emacs without the use of an OpenAI API key.  The program is
+implemented using Chromium/Chrome browser's CDP (Chrome DevTools
+Protocol) (https://chromedevtools.github.io/devtools-protocol/), and
+therefore requires a CDP-enabled Chromium/Chrome browser to be
+running.  **chatgpt-el** operates by remotely controlling your
+instance of Chromium/Chrome using the Node.js script called `chatgpt`,
+which is built on the Puppeteer library
+(https://pptr.dev/). Therefore, your Chromium/Chrome browser must
+accept a CDP connection from the `chatgpt` script.
 
 ![overview](overview.png)
 
-Note that the implementation of **chatgpt** script depends on the
-internal structure of the HTML file returned by the ChatGPT server.
-If **chatgpt** does not work in your environment, you may need to
-modifty **chatgpt** according to your einvironment.
+Note that the implementation of the `chatgpt` script depends on the
+internal structure of the HTML file returned by the ChatGPT server. If
+`chatgpt` does not work in your environment, you may need to modify
+the program according to your environment.
 
 # PREREQUISITES
 
