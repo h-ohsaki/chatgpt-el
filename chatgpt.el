@@ -79,46 +79,7 @@
 			 nil nil nil "-s"))
   (setq chatgpt--last-query query))
 
-;; (chatgpt-send 1)
-(defun chatgpt-send (arg)
-  "Send the query around the point to the ChatGPT server.  If the
-mark is active, send the hlghlighted region as a query."
-  (interactive "P")
-  (let* ((query
-	  (if mark-active
-	      (buffer-substring-no-properties (region-beginning) (region-end))
-	    ;; When mark is inactive.
-	    (chatgpt--current-paragraph)))
-	 (buf (get-buffer-create chatgpt--buffer-name)))
-    ;; Change the behavior when prefix is provided.
-    (cond ((equal arg '(16))
-	   (setq query "続き"))
-	  (arg
-	   (let* ((ch (read-char "Prefix [w]what/[s]ummary/[j]apanese/[e]nglish/[p/P]roofread: "))
-		  (val (assoc ch chatgpt-prefix-alist)))
-	     (setq query (concat (cdr val) " " query)))))
-    (chatgpt-send-query query)
-    (chatgpt--start-monitor)))
-
 ;; (chatgpt-query "Emacs")
-(defun chatgpt-query (query)
-  (interactive (list (read-string "ChatGPT query: " 
-				  (string-trim (thing-at-point 'paragraph)))))
-  (chatgpt-send-query query)
-  (chatgpt--start-monitor))
-
-;; (chatgpt-lookup "Emacs")
-(defun chatgpt-lookup (query)
-  (interactive (list (read-string "ChatGPT lookup: " 
-				  (thing-at-point 'word))))
-  (chatgpt-send-query query)
-  (chatgpt--start-monitor))
-
-(defun chatgpt--read-prefix ()
-  (let* ((ch (read-char "Prefix (w/s/j/e/p/P): "))
-	 (elem (assoc ch chatgpt-prefix-alist)))
-    (cdr elem)))
-  
 (defun chatgpt-query (arg)
   (interactive "P")
   (let (prefix query)
@@ -131,9 +92,27 @@ mark is active, send the hlghlighted region as a query."
 	  (setq query (buffer-substring-no-properties
 		       (region-beginning) (region-end)))
 	;; When mark is inactive.
-	(setq query (read-string "ChatGPT lookup: "
-				 (thing-at-point 'paragraph)))))
-    (message (concat prefix " " query))))
+	(let ((paragraph (string-trim
+			  (or (thing-at-point 'paragraph) ""))))
+	  (setq query (read-string "ChatGPT lookup: " paragraph)))))
+    (chatgpt-send-query (concat prefix query))
+    (chatgpt--start-monitor)))
+    
+
+;; (chatgpt-lookup "Emacs")
+(defun chatgpt-lookup (query)
+  (interactive (list (read-string "ChatGPT lookup: " 
+				  (thing-at-point 'word))))
+  (chatgpt-send-query query)
+  (chatgpt--start-monitor))
+
+(defun chatgpt--read-prefix ()
+  (let* ((ch (read-char "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof): "))
+	 (elem (assoc ch chatgpt-prefix-alist))
+	 (prefix (cdr elem)))
+    (if prefix
+	(concat prefix " ")
+      nil)))
 
 ;; (chatgpt-insert-reply)
 (defun chatgpt-insert-reply ()
@@ -147,8 +126,6 @@ the ChatGPT server."
 (defun chatgpt--start-monitor ()
   "Start monitoring the reply from the ChatGPT server."
   (interactive)
-  ;; Only for debugging.
-  (kill-buffer chatgpt--buffer-name)
   (let ((buf (get-buffer-create chatgpt--buffer-name)))
     ;; Initialize the reply buffer.
     (with-current-buffer buf
