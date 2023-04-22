@@ -12,9 +12,9 @@ easily accessed from a program using OpenAI API (e.g., using openai
 module in the Python language), but accessing ChatGPT using OpenAI API
 has several drawbacks.
 
-1. Batch processing via OpenAI API is slow; Accessing OpenAI API
-   sometimes takes a long time.  Such slow repsonse makes the
-   experiences of accessing ChatGPT frustrating.
+1. Batch processing via OpenAI API is slow; Accessing OpenAI API is
+   slow and sometimes it takes very long time.  Such slow repsonse
+   makes the experiences of accessing ChatGPT frustrating.
 
 2. You must have a non-free OpenAI account with your credit card
    registration.  Frequently accessing ChatGPT may cost a lot, so that
@@ -26,11 +26,11 @@ without OpenAI API key.
 **chatgpt-el** is implemented utlizing Chromium/Chrome browser's CDP
 (Chrome DevTools Protocol)
 (https://chromedevtools.github.io/devtools-protocol/), and therefore
-it requires CDP-enabled Chromium/Chrom browser is running.
+it requires a CDP-enabled Chromium/Chrom browser is running.
 **chatgpt-el** operates by remotely controlling your instance of
 Chromium/Chrome using the Node.js script called `chatgpt`, which is
 built on Puppeteer library (https://pptr.dev/).  Therefore, your
-Chromium/Chrom must accept CDP connections from `chatgpt` script.
+Chromium/Chrom must accept a CDP connection from `chatgpt` script.
 
 ![overview](overview.png)
 
@@ -55,9 +55,9 @@ modifty **chatgpt** according to your einvironment.
 > sudo intall -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
-(autoload 'chatgpt-send "chatgpt" nil t)
-(autoload 'chatgpt-display-reply "chatgpt" nil t)
-(global-set-key "\C-cq" 'chatgpt-send-region)
+(autoload 'chatgpt-query "chatgpt" nil t)
+(autoload 'chatgpt-insert-reply "chatgpt" nil t)
+(global-set-key "\C-cq" 'chatgpt-query)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt")
 EOF
@@ -78,10 +78,11 @@ modules such as Puppeteer and html-to-text must be accessible from
 2. Visit ChatGPT (https://chat.openai.com/) in Chromium/Chrome, and
    login with your OpenAI account.
 
-3. On Emacs, move the point (i.e., the cursor in Emacs) in or at the
-   end of the paragraph of query sentence(s).  Alternatively, you can
-   select the region containing query sentence(s).  Then, type `C-c q`
-   or execute `M-x chatgpt-send`.
+3. On Emacs, move the point (i.e., the cursor in Emacs) around the
+   paragraph of the query.  Alternatively, you can select the region
+   containing the query.  Then, type `C-c q` or execute `M-x
+   chatgpt-query`.  With a prefix argument (e.g., `C-u C-c C-q`), you
+   will be prompted what query prefix is prepended to the query.
 
 4. The query is automatically submitted to ChatGPT in your
    Chromium/Chrome.  The reply from ChatGPT will be displayed in
@@ -93,7 +94,7 @@ modules such as Puppeteer and html-to-text must be accessible from
 
 # TROUBLE SHOOTING
 
-1. Make sure your Chromium/Chrome accepts CDP connection on
+1. Make sure your Chromium/Chrome accepts a CDP connection on
    localhost:9000.
    
 ``` sh
@@ -118,27 +119,29 @@ Content-Type:application/json; charset=UTF-8
 }
 ```
 
-2. Send a query using `chatgpt` script.
+2. Send a query from the command line using `chatgpt` script.
 
 ``` sh
 > echo hello | ./chatgpt -s
 ```
 
-You should see that `hello` is sent to ChatGPT in your Chromium/Chrome
+You should see that "hello" is sent to ChatGPT in your Chromium/Chrome
 browser.
 
-3. Receive a reply using `chatgpt` script.
+3. Receive a reply from the command line using `chatgpt` script.
 
 ``` sh
 > ./chatgpt -r
 Hello! How can I assist you today?
+
+EOF
 ```
 
 This will show the reply from ChatGPT, which must be equivalent to
-that shown in Chromium/Chrome.
+that shown in your Chromium/Chrome.
 
 # FOR QUTEBROWSER USERS
 
-If you are a fan of qutebrowser instead of Chromium/Chrome browser,
-you can use **qutechat** (https://github.com/h-ohsaki/qutechat), a
+If you are a qutebrowser user instead of Chromium/Chrome, you can use
+**qutechat** (https://github.com/h-ohsaki/qutechat), a
 qutebrowser-version of **chatgpt-el**.
