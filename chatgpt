@@ -58,20 +58,19 @@ async function send (buf) {
     await text.press('Enter');
 }
 
-function smart_diff(last_str, str) {
-    let offset = last_str.length;
-    const last_phrase = last_str.slice(-4).replaceAll('\n', ' ');
-    for (const delta in [0, -1, 1, -2, 2]) {
-	offset = last_str.length + delta;
-	const phrase = str.slice(offset - 4, offset).replaceAll('\n', ' ');
-	if (last_phrase == phrase)
-	    return str.slice(offset);
-    }
-    offset = last_str.length;
-    const phrase = str.slice(offset - 4, offset).replaceAll('\n', ' ');
-    if (last_phrase == phrase)
-	return str.slice(offset);
-    return `'<<${last_phrase}/${phrase}>>` + str.slice(offset);
+function fuzzy_diff(substr, str, k=4, maxdelta=4) {
+    // Return the trailing part of string STR assuming that string
+    // SUBSTR is the (possible) prefix.  
+    const pattern = substr.slice(-k).replaceAll('\n', '');
+    const len = substr.length;
+    if (len - k - maxdelta < 0)
+	return str.slice(len);
+    const s = str.slice(len - k - maxdelta, len - k + maxdelta + k).replaceAll('\n', '');
+    const pos = s.indexOf(pattern);
+    if (pos < 0)
+	return `**[${pattern}][${s}]` + str.slice(len);
+    const offset = Math.max(len - maxdelta + pos, 0);
+    return str.slice(offset);
 }
 	
 async function recv (debug) {
@@ -83,16 +82,17 @@ async function recv (debug) {
         // Quit immediately if there is no reply.
         if (!html)
             break;
-	html = html.replaceAll(/<button.*?<\/button>/g, '');
-	html = html.replaceAll(/<code>/g, '');
-        let text = convert(html, {
-	    preserveNewlines: true,
-	    wordwrap: false,
-	});
-	if (debug)
+	// html = html.replaceAll(/<button.*?<\/button>/g, '');
+	// html = html.replaceAll(/<\/?code>/g, '');
+        // let text = convert(html, {
+	//     preserveNewlines: true,
+	//     wordwrap: false,
+	// });
+	if (1 || debug)
 	    text = html
         // Detect the difference (i.e., update) since the last display.
-        const diff = smart_diff(last_text, text);
+        //const diff = fuzzy_diff(last_text, text);
+	diff = text.slice(last_text.length)
         last_text = text;
         process.stdout.write(diff);
         if (await is_finished(page))
