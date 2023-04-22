@@ -20,17 +20,8 @@
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt"
   "This variable is used to specify the file path to the ChatGPT
-program executable. The default value
-is "~/src/chatgpt-el/chatgpt", but it can be customized by
-setting the variable to a different file path.
-
-The ChatGPT program is responsible for sending queries to the
-ChatGPT server and receiving replies. This variable is used in
-conjunction with the `chatgpt-send-query` function to execute the
-ChatGPT program and retrieve the server's response.
-
-Note that the ChatGPT program is not included with this package
-and must be installed separately.")
+program executable. The ChatGPT program is responsible for
+sending queries to the ChatGPT server and receiving replies. ")
 
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues.")
@@ -45,17 +36,7 @@ and must be installed separately.")
 This variable is a list of prefix codes that can be used to
 specify the type of query to send to the ChatGPT server. Each
 prefix code is paired with a string that describes the
-corresponding query.
-
-The prefix codes are single characters, such as ?w, ?s, ?j, ?e,
-?p, ?P, and ?d.  When sending a query to the ChatGPT server, a
-prefix code can be specified using the `chatgpt--read-prefix`
-function, which prompts the user to select a prefix code from the
-list. The corresponding string is then added to the query before
-sending it to the server.
-
-The prefix codes and strings in this list are customizable and
-can be modified to suit the user's needs.")
+corresponding query.")
 
 (defvar chatgpt-font-lock-keywords
   '(;; comment
@@ -77,18 +58,11 @@ can be modified to suit the user's needs.")
 
 This variable is a list of regular expressions and corresponding
 font lock faces for highlighting keywords in ChatGPT query
-buffers. Font lock is a mode for highlighting text in Emacs
-buffers, and it is used in this variable to provide syntax
-highlighting for the different parts of ChatGPT queries.
-
-The regular expressions in this list match different types of
-text in ChatGPT query buffers, such as comments, headers, items,
-constants, and strings.  Each regular expression is paired with a
-font lock face, which determines the color and style of the
-highlighted text.
-
-The font lock keywords in this list are customizable and can be
-modified to suit the user's preferences.")
+buffers. The regular expressions in this list match different
+types of text in ChatGPT query buffers, such as comments,
+headers, items, constants, and strings.  Each regular expression
+is paired with a font lock face, which determines the color and
+style of the highlighted text.")
 
 (defvar chatgpt--buffer-name "*ChatGPT reply*"
   "The name of the buffer to display the reply from ChatGPT.")
@@ -118,18 +92,7 @@ modified to suit the user's preferences.")
 
 This function takes a string argument `query`, which represents
 the text of the query to be sent to the ChatGPT server. The query
-is passed to the ChatGPT program executable, which is responsible
-for sending the query to the server and receiving a response.
-
-The ChatGPT program is executed using the `call-process-region`
-function, which provides chromium with the query string. The `-s`
-option is used to specify that the query should be sent to the
-ChatGPT server.
-
-Once the query has been sent, the function sets the
-`chatgpt--last-query` variable to the query string, which is used
-to display the previous query when continuing a previous
-conversation."
+is passed to the ChatGPT program executable."
   (interactive)
   ;; Compose a query in a temporary buffer.
   (with-temp-buffer
@@ -148,15 +111,13 @@ the region is active in the buffer, the selected text is used as
 the query. Otherwise, the current paragraph at point is extracted
 and used as the query.
 
-Optionally, a prefix can be specified by calling the
-`chatgpt--read-prefix` function. If the argument is equal to the
-symbol `(16)`, the function sets the query to 'next', indicating
-that the user wants to continue a previous query.
+Optionally, a prefix can be specified by invoking with a prefix
+argument. If invoked with C-u C-u, the function sets the query to
+'next', indicating that the user wants to continue a previous
+query.
 
-Once the query is determined, it is sent to the ChatGPT server
-using the `chatgpt-send-query` function, and the reply is
-displayed in a separate buffer using the `chatgpt--start-monitor`
-function."
+Once the query is determined, it is sent to the ChatGPT server,
+and the reply is displayed in a separate buffer."
   (interactive "P")
   (let (prefix query)
     (cond ((equal arg '(16))
@@ -180,12 +141,7 @@ function."
 
 When called interactively, prompts the user to enter a query. If
 the cursor is positioned over a word in the buffer, the word is
-used as the default query.
-
-Once the query is determined, it is sent to the ChatGPT server
-using the `chatgpt-send-query` function, and the reply is
-displayed in a separate buffer using the `chatgpt--start-monitor`
-function."
+used as the default query."
   (interactive (list (read-string "ChatGPT lookup: " 
 				  (thing-at-point 'word))))
   (chatgpt-send-query query)
@@ -197,11 +153,9 @@ function."
 This function prompts the user to enter a prefix code for a
 ChatGPT query. The prefix code is used to specify the type of
 query to send to the ChatGPT server, and it is selected from a
-list of options provided by the `chatgpt-prefix-alist` variable.
-
-If the user enters an invalid prefix code, the function returns
-`nil`."
-  (let* ((ch (read-char "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[d]oc): "))
+list of options provided by the `chatgpt-prefix-alist` variable."
+  (let* ((ch (read-char
+	      "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[d]oc): "))
 	 (elem (assoc ch chatgpt-prefix-alist))
 	 (prefix (cdr elem)))
     (if prefix
@@ -213,12 +167,7 @@ If the user enters an invalid prefix code, the function returns
   "Insert the most recent ChatGPT reply at the current point.
 
 This function inserts the most recent reply from the ChatGPT
-server at the current point in the buffer. The reply is stored in
-the `chatgpt--last-reply` variable, which is set by the
-`chatgpt-receive-reply` function when a reply is received from
-the server.
-
-If there is no previous reply, the function does nothing."
+server at the current point in the buffer. "
   (interactive)
   (insert chatgpt--last-reply))
 
@@ -228,24 +177,13 @@ If there is no previous reply, the function does nothing."
   "Create a buffer for monitoring ChatGPT server replies.
 
 This function creates a new buffer for displaying replies from
-the ChatGPT server. The buffer is created using the
-`get-buffer-create` function, and its name is specified by the
-`chatgpt--buffer-name` variable.
+the ChatGPT server.  The function then initializes the reply
+buffer by enabling word-wrap, and enabling font-lock mode with
+the `chatgpt-font-lock-keywords` variable.
 
-The function then initializes the reply buffer by erasing its
-contents, enabling word-wrap, and enabling font-lock mode with
-the `chatgpt-font-lock-keywords` variable. The font-lock keywords
-specify how different parts of the reply text should be
-highlighted for improved readability.
-
-The reply buffer is then displayed in a new window using the
-`split-window` and `set-window-buffer` functions. The window is
+The reply buffer is then displayed in a new window. The window is
 split to show the reply buffer and the buffer of the current
-window.
-
-Finally, the function schedules the next timer event by setting
-the `chatgpt--timer-count` variable to 0 and calling the
-`chatgpt--sched-timer-event` function."
+window."
   (interactive)
   (let ((buf (get-buffer-create chatgpt--buffer-name)))
     ;; Initialize the reply buffer.
@@ -264,23 +202,14 @@ the `chatgpt--timer-count` variable to 0 and calling the
   (chatgpt--sched-timer-event))
 
 (defun chatgpt--process-sentinel (proc event)
-  "Process the completion of a ChatGPT server query.
-
-This function is called by the `start-process` function to
-monitor the completion of a ChatGPT server query. When the
-process completes, the `event` argument contains a string
-indicating the completion status.
+  "Handle the completion of a process retrieving ChatGPT server query.
 
 If the event indicates that the process finished successfully,
 the reply from the ChatGPT server is retrieved from the temporary
-buffer and stored in the `chatgpt--last-reply` variable. If the
-reply is different from the previous reply, it is inserted into
-the reply buffer and displayed to the user. If the reply is the
-same as the previous reply, the function increments the
-`chatgpt--timer-count` variable.
+buffer. If the reply is different from the previous reply, it is
+inserted into the reply buffer and displayed to the user.
 
-If the `chatgpt--timer-count` variable is less than 10,
-indicating that the reply is still being generated, the function
+If it seems that the reply is still being generated, the function
 schedules the next timer event using the
 `chatgpt--sched-timer-event` function."
   ;; Is process completed?
@@ -307,29 +236,17 @@ schedules the next timer event using the
 
 ;; (chatgpt--timer-event)
 (defun chatgpt--timer-event ()
-  "Send a query to the ChatGPT server and schedule the next timer event.
+  "Run an event that retrieves the reply from the ChatGPT server.
 
-This function sends a query to the ChatGPT server by starting a
-new process with the `start-process` function. The query is taken
-from the `chatgpt--last-query` variable, which should contain the
-most recent query sent by the user.
+This function starts a new ChatGPT process with the command
+`chatgpt-prog -r` and redirects its output to the temporary
+buffer.  The function sets a process sentinel that calls
+`chatgpt--process-sentinel` when the process ends, to handle the
+display of the response.
 
-The process output is captured in a temporary buffer created with
-the `get-buffer-create` function. The buffer is initialized with
-a header that includes the query and two newline characters.
-
-The `set-process-sentinel` function is used to register a
-sentinel function, which is called when the process
-completes. The sentinel function is specified as
-`chatgpt--process-sentinel`.
-
-The function then schedules the next timer event by setting the
-`chatgpt--timer-count` variable to 0 and calling the
-`chatgpt--sched-timer-event` function.
-
-If a ChatGPT query is already in progress, the function stops the
-previous process with the `kill-process` function before starting
-a new one."
+This function is intended to be called periodically by a timer,
+so that new responses are fetched from the ChatGPT program at
+regular intervals."
   ;; Stop the process if already running.
   (if (memq chatgpt--process (process-list))
       (kill-process chatgpt--process))
@@ -344,11 +261,6 @@ a new one."
 
 ;; (chatgpt--sched-timer-event)
 (defun chatgpt--sched-timer-event ()
-  "Schedule the next timer event to send a query to the ChatGPT server.
-
-This function uses the `run-with-timer` function to schedule the
-`chatgpt--timer-event` function to be called after 0.2
-seconds. The `chatgpt--timer-event` function sends the query to
-the ChatGPT server and schedules the next timer event if
-necessary."
+  "Schedule the next timer event to receive the reply from the
+ChatGPT server."
   (run-with-timer .2 nil 'chatgpt--timer-event))
