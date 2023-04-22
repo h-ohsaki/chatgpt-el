@@ -41,7 +41,9 @@ async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
     const page = await current_page();
     const text = await page.$('textarea');
-    await text.type(buf);
+    // Directly modify the value of textarea.
+    // https://stackoverflow.com/questions/47966510/how-to-fill-an-input-field-using-puppeteer
+    await page.$eval('textarea', (el, buf) => el.value = buf, buf);
     await text.press('Enter');
 }
 
