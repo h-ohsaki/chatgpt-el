@@ -43,7 +43,7 @@ modifty **chatgpt** according to your einvironment.
 
 - Chromium or Chrome browser (or other browsers supporting the CDP protocol).
 - Node.js (https://nodejs.org/en).
-- html-to-text moudle (https://www.npmjs.com/package/html-to-text)
+- html-to-text moudle (https://github.com/html-to-text/node-html-to-text)
 
 # INSTALLATION
 
