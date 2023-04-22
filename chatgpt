@@ -76,6 +76,14 @@ async function recv (debug) {
 const mode = process.argv[2];
 const debug = (process.argv.length >= 4);
 
+if (mode == '-i') {
+    (async () => {
+	const page = await current_page();
+	await page.reload();
+	process.exit(0);
+    })();
+}
+
 // Send mode.
 if (mode == '-s') {
     // Read lines from STDIN.
