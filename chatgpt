@@ -28,7 +28,7 @@ async function current_page () {
 
 async function extract_reply (page) {
     // Note: All replies are in DIV tags with markdown class.
-    const elems = await page.$$('div.markdown');
+    const elems = await page.$$('div.items-start');
     const elem = elems[elems.length - 1];
     // Replies might be empty.
     if (!elem)
