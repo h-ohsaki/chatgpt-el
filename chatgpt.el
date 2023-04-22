@@ -80,10 +80,6 @@
   (with-temp-buffer
     (insert query)
     (setq chatgpt--last-query query)
-    ;; FIXME: Should preserve all newlines.
-    (goto-char (point-min))
-    (while (search-forward "\n" nil t)
-      (replace-match " "))
     ;; Provide chromium with the query string.
     (call-process-region (point-min) (point-max) chatgpt-prog
 			 nil nil nil "-s")))
