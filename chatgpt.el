@@ -40,6 +40,33 @@
     (?p . "Proofread following text and summarize all suggested changes.")
     (?P . "以下の文章の誤りを直して、変更点の一覧を出力して。")))
 
+(defvar chatgpt-font-lock-keywords
+  '(;; comments
+    ("^[#;%].*"  . font-lock-comment-face)
+    ;; headers
+    ("^.*¶$" . font-lock-function-name-face)
+    ("^\\*+ +.*$" . font-lock-function-name-face)
+    ;; itemize
+    ("^ *[0-9.]+ " . font-lock-type-face)
+    ("^ *[-*] .+$" . font-lock-string-face)
+    ;; code
+    ("`+.+?`+" . font-lock-type-face)
+    ;; paren
+    ("\\[.+?\\]" . font-lock-variable-name-face)
+    ("{.+?}" . font-lock-keyword-face)
+    ;; symbols
+    ("[$()\\]" . font-lock-type-face)
+    ("\\(--+\\||\\)" . font-lock-comment-face) ;; table
+    ;; constants
+    ("[A-Z_]\\{3,\\}" . font-lock-constant-face)
+    ;; LaTeX macros
+    ("\\\\\\w+" . font-lock-keyword-face)
+    ;; string
+    ("\".*?\"" . font-lock-string-face)
+    ("'.*?'" . font-lock-string-face)
+    ("`.*?'" . font-lock-string-face)
+    ("‘.*?’" . font-lock-string-face)))
+
 (defvar chatgpt--process nil
   "The process for receiving the stream of response from the server.")
 
@@ -137,15 +164,19 @@ ChatGPT."
   (let ((buf (get-buffer-create chatgpt-buffer-name)))
     ;; Prepare and display the reply buffer.
     (with-current-buffer buf
+      (setq font-lock-defaults
+	    '(chatgpt-font-lock-keywords 'keywords-only nil))
+      (font-lock-mode 1)
+      ;;
       (erase-buffer)
       (insert "Q. " query "\n\n")
       (setq chatgpt--process (start-process "chatgpt" buf chatgpt-prog "-r"))
       (set-process-filter chatgpt--process 'chatgpt--process-filter)
-      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
-      ;;
-      (delete-other-windows)
-      (split-window)
-      (set-window-buffer (next-window) buf))))
+      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))
+    ;;
+    (delete-other-windows)
+    (split-window)
+    (set-window-buffer (next-window) buf)))
 
 ;; (chatgpt-insert-reply)
 (defun chatgpt-insert-reply ()
