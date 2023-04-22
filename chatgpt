@@ -37,6 +37,14 @@ async function extract_reply (page) {
     return html;
 }
     
+async function is_replying (page) {
+    // Note: This code assumes that `Stop generating' appers during
+    // the reply is being displayed.
+    const main = await page.$('main');
+    const html = await page.evaluate(b => b.innerHTML, main);
+    return html.includes('Stop generating');
+}
+
 async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
     const page = await current_page();
@@ -57,7 +65,11 @@ async function recv (debug) {
     });
     if (debug)
 	text = html;
-    process.stdout.write(text);
+    text = text.replaceAll(/\n{3,}/g, '\n\n');
+    console.log(text)
+    if (!await is_replying(page)) {
+	console.log('\nEOF')
+    }
 }
 
 // argv[2] is the first user-specified argument.
