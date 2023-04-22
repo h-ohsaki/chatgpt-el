@@ -25,13 +25,6 @@
 (defvar chatgpt-buffer-name "*ChatGPT reply*"
   "The name of the buffer to display the response from ChatGPT.")
 
-(defvar chatgpt-session-file "~/.chatgpt-session.org")
-
-(defvar chatgpt-auto-fill nil)
-
-(defvar chatgpt--last-reply nil
-  "The last reply returned by the server.")
-
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues.")
     (?s . "Summarize the following in a plain Japanese.")
@@ -67,8 +60,13 @@
     ("`.*?'" . font-lock-string-face)
     ("‘.*?’" . font-lock-string-face)))
 
-(defvar chatgpt--process nil
-  "The process for receiving the stream of response from the server.")
+(defvar chatgpt--last-reply nil
+  "The last reply returned by the server.")
+
+(defvar chatgpt--timer nil
+  "A timer event to retriee the response from the server.")
+
+(defvar chatgpt--timer-count nil)
 
 ;; (chatgpt-send-string "which of Emacs or vi is better?")
 ;; (chatgpt-send-string "what is Emacs's interesting history?")
@@ -119,43 +117,6 @@ the mark is active, send the hlghlighted region as a query."
     (chatgpt-send-string query)
     (chatgpt-start-monitor query)))
 
-(defun chatgpt--fill-current-line ()
-  "Fill the current line if it is longer than `fill-column`."
-  (let ((beg (line-beginning-position))
-	(end (line-end-position)))
-  (save-excursion
-    (goto-char end)
-    (if (> (current-column) fill-column)
-	(fill-region beg end)))))
-
-(defun chatgpt--process-filter (proc str)
-  "A process filter that receives the reply stream from `chatgpt-prog`."
-  (let ((buf (get-buffer-create chatgpt-buffer-name)))
-    (with-current-buffer buf
-      (save-excursion
-	;; Insert the input at the end of the buffer.
-	(goto-char (point-max))
-	(insert str)
-	(when chatgpt-auto-fill
-	  ;; Fill the above lines if they are lengthy.
-	  (goto-char (point-max))
-	  (forward-line -3)
-	  (while (not (eobp))
-	    (chatgpt--fill-current-line)
-	    (forward-line 1)))))))
-
-(defun chatgpt--process-sentinel (proc event)
-  (when (and (string-match-p "finished" event)
-	     chatgpt-session-file)
-    (let ((buf (get-buffer-create chatgpt-buffer-name))
-	  (save-silently t))
-      (with-current-buffer buf
-	(save-excursion
-	  (goto-char (point-max))
-	  (insert "\n\n")
-	  (write-region (point-min) (point-max)
-			chatgpt-session-file 'append))))))
-
 ;; (chatgpt-start-monitor)
 (defun chatgpt-start-monitor (query)
   "Start a monitor to watch the output (i.e., reply) from
@@ -167,24 +128,49 @@ ChatGPT."
       (setq font-lock-defaults
 	    '(chatgpt-font-lock-keywords 'keywords-only nil))
       (font-lock-mode 1)
-      ;;
-      (erase-buffer)
-      (insert "Q. " query "\n\n")
-      (setq chatgpt--process (start-process "chatgpt" buf chatgpt-prog "-r"))
-      (set-process-filter chatgpt--process 'chatgpt--process-filter)
-      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))
     ;;
     (delete-other-windows)
     (split-window)
     (set-window-buffer (next-window) buf)))
+    (setq chatgpt--timer-count 0)
+    (chatgpt--sched-timer-event))
+
+;; (chatgpt--parse-reply)
+(defun chatgpt--parse-reply ()
+  "Check the response for the last query from ChatGPT and return
+it as a string."
+  (interactive)
+  ;; Retrieve the reply for the last query.
+  (with-temp-buffer
+    ;; FIXME: This code assumes the first line is the query.
+    (call-process chatgpt-prog nil t nil "-r")
+    (buffer-string)))
 
 ;; (chatgpt-insert-reply)
 (defun chatgpt-insert-reply ()
   "At the current point, insert the response for the last query
 from ChatGPT."
   (interactive)
-  (let ((buf (get-buffer-create chatgpt-buffer-name))
-        reply)
-    (with-current-buffer buf
-      (setq reply (buffer-string)))
+  (let ((reply (chatgpt--parse-reply)))
     (insert reply)))
+
+;; (chatgpt--timer-event)
+(defun chatgpt--timer-event ()
+  (let ((buf (get-buffer-create chatgpt-buffer-name))
+	(reply (chatgpt--parse-reply)))
+    (with-current-buffer buf
+      (if (string= chatgpt--last-reply reply) 
+	  ;; No update.
+	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
+	;; Updated.
+	(erase-buffer)
+	(insert reply)
+	(setq chatgpt--last-reply reply)
+	(setq chatgpt--timer-count 0))
+      ;; Schedule next event if it seems reply is updating.
+      (if (< chatgpt--timer-count 10)
+	  (chatgpt--sched-timer-event)))))
+
+;; (chatgpt--sched-timer-event)
+(defun chatgpt--sched-timer-event ()
+  (run-with-timer .5 nil 'chatgpt--timer-event))
