@@ -60,22 +60,18 @@ async function send (buf) {
 
 function smart_diff(last_str, str) {
     let offset = last_str.length;
-    const last_phrase = last_str.slice(-4);
-    let phrase = str.slice(offset -4, offset);
+    const last_phrase = last_str.slice(-4).replaceAll('\n', ' ');
+    for (const delta in [0, -1, 1, -2, 2]) {
+	offset = last_str.length + delta;
+	const phrase = str.slice(offset - 4, offset).replaceAll('\n', ' ');
+	if (last_phrase == phrase)
+	    return str.slice(offset);
+    }
+    offset = last_str.length;
+    const phrase = str.slice(offset - 4, offset).replaceAll('\n', ' ');
     if (last_phrase == phrase)
 	return str.slice(offset);
-    // FIXME: Need refactoring.
-    offset = last_str.length - 1;
-    phrase = str.slice(offset -4, offset);
-    if (last_phrase == phrase)
-	return str.slice(offset);
-
-    offset = last_str.length + 1;
-    phrase = str.slice(offset -4, offset);
-    if (last_phrase == phrase)
-	return str.slice(offset);
-
-    return '**' + str.slice(offset);
+    return `'<<${last_phrase}/${phrase}>>` + str.slice(offset);
 }
 	
 async function recv (debug) {
@@ -88,6 +84,7 @@ async function recv (debug) {
         if (!html)
             break;
 	html = html.replaceAll(/<button.*?<\/button>/g, '');
+	html = html.replaceAll(/<code>/g, '');
         let text = convert(html, {
 	    preserveNewlines: true,
 	    wordwrap: false,
@@ -100,7 +97,7 @@ async function recv (debug) {
         process.stdout.write(diff);
         if (await is_finished(page))
             break;
-        await sleep(200);
+        await sleep(500);
     }
 }
 
