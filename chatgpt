@@ -11,6 +11,10 @@ function die (msg='aborted') {
     process.exit(1);
 }
     
+async function sleep (ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function current_page () {
     // FIXME: Port number should be configurable.
     const browser = await puppeteer.connect({browserURL: 'http://localhost:9000'});
@@ -22,6 +26,7 @@ async function current_page () {
     if (url.indexOf('chat.openai.com') < 0) {
 	await page.goto('https://chat.openai.com/');
 	const text = await page.waitForSelector('textarea');
+	await sleep(1000);
     }
     return page;
 }
