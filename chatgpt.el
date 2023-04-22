@@ -42,8 +42,10 @@
     ;; constants
     ("[A-Z_]\\{3,\\}" . font-lock-constant-face)	
     ;; strings
+    ("【.+?】" . font-lock-constant-face)
     ("「.+?」" . font-lock-constant-face)
-    ("\".+?\"" . font-lock-string-face)))
+    ("\".+?\"" . font-lock-string-face)
+    ("'.+?'" . font-lock-string-face)))
 
 (defvar chatgpt--buffer-name "*ChatGPT reply*"
   "The name of the buffer to display the reply from ChatGPT.")
