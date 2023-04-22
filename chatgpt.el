@@ -136,10 +136,10 @@ the ChatGPT server."
     ;; Display in the other window.
     (delete-other-windows)
     (split-window)
-    (set-window-buffer (next-window) buf)
-    ;; Schedule the next timer event.
-    (setq chatgpt--timer-count 0)
-    (chatgpt--sched-timer-event)))
+    (set-window-buffer (next-window) buf))
+  ;; Schedule the next timer event.
+  (setq chatgpt--timer-count 0)
+  (chatgpt--sched-timer-event))
 
 (defun chatgpt--process-sentinel (proc event)
   ;; Is process completed?
@@ -151,15 +151,18 @@ the ChatGPT server."
 	  ;; No update.
 	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
 	;; Updated.
-	(let ((buf (get-buffer-create chatgpt--buffer-name)))
+	(let ((buf (get-buffer-create chatgpt--buffer-name))
+	      last-pos)
 	  (with-current-buffer buf
+	    (setq last-pos (point))
 	    (erase-buffer)
 	    (insert reply)
-	    (setq chatgpt--last-reply reply)
-	    (setq chatgpt--timer-count 0))))
-      ;; Schedule next event if it seems reply is in progress.
-      (if (< chatgpt--timer-count 10)
-	  (chatgpt--sched-timer-event)))))
+	    (goto-char last-pos)))
+	(setq chatgpt--last-reply reply)
+	(setq chatgpt--timer-count 0)))
+    ;; Schedule next event if it seems reply is in progress.
+    (if (< chatgpt--timer-count 10)
+	(chatgpt--sched-timer-event))))
 
 ;; (chatgpt--timer-event)
 (defun chatgpt--timer-event ()
