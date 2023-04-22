@@ -60,6 +60,9 @@
     ("`.*?'" . font-lock-string-face)
     ("‘.*?’" . font-lock-string-face)))
 
+(defvar chatgpt--last-query nil
+  "The last query sent to the server.")
+
 (defvar chatgpt--last-reply nil
   "The last reply returned by the server.")
 
@@ -76,6 +79,7 @@
   ;; Compose a query string in a temporary buffer.
   (with-temp-buffer
     (insert query)
+    (setq chatgpt--last-query query)
     ;; FIXME: Should preserve all newlines.
     (goto-char (point-min))
     (while (search-forward "\n" nil t)
@@ -142,7 +146,7 @@ it as a string."
   (interactive)
   ;; Retrieve the reply for the last query.
   (with-temp-buffer
-    ;; FIXME: This code assumes the first line is the query.
+    (insert "Q. " chatgpt--last-query "\n\n")
     (call-process chatgpt-prog nil t nil "-r")
     (buffer-string)))
 
