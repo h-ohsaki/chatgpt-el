@@ -21,20 +21,13 @@ const readline = require('readline');
 const puppeteer = require('puppeteer');
 const convert = require('html-to-text');
 
-// This function is used for debugging purposes. It takes an optional
-// msg argument, which defaults to the string "aborted". It prints a
-// message to the console with the prefix "** ", followed by the msg,
-// and exits the current process with an exit code of 1.
+// This function is used for debugging purposes.
 function die (msg='aborted') {
     console.log('** ', msg);
     process.exit(1);
 }
     
-// This function provides a delay of a certain number of milliseconds
-// before resolving the promise. It takes a single argument ms, which
-// specifies the number of milliseconds to wait before the promise is
-// resolved. The function returns a Promise object that is resolved
-// after the specified time has elapsed.
+// This function provides a delay of a certain number of milliseconds.
 async function sleep (ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -42,13 +35,7 @@ async function sleep (ms) {
 // This function returns a Puppeteer page object for the current tab
 // in the browser connected to the ChatGPT website. If the website is
 // not already open in the current tab, it opens the website and waits
-// for the textarea element to appear on the page. The function also
-// connects to the Puppeteer browser using the default port number
-// (9000) and returns the first page in the list of available
-// pages. The URL of the current page is checked to determine if the
-// ChatGPT website is already open. If the ChatGPT website is already
-// open in the current tab, the function simply returns the current
-// page object.
+// for the textarea element to appear on the page.
 async function current_page () {
     // FIXME: Port number should be configurable.
     const browser = await puppeteer.connect({browserURL: 'http://localhost:9000'});
@@ -66,12 +53,7 @@ async function current_page () {
 }
 
 // This asynchronous function takes a page object as input and returns
-// the HTML content of the last reply from ChatGPT server. It first
-// selects all the div tags with class items-start on the page using
-// the $$ method of the page object. It then selects the last element
-// from the list of div tags and gets its inner HTML using the
-// page.evaluate method. If there are no div tags matching the
-// selection criteria, an empty string is returned.
+// the HTML content of the last reply from ChatGPT server.
 async function extract_reply (page) {
     // Note: All replies are in DIV tags with markdown class.
     const elems = await page.$$('div.items-start');
@@ -86,9 +68,7 @@ async function extract_reply (page) {
 // This function checks whether a reply is currently being displayed
 // in a given Puppeteer page. It does so by looking for the presence
 // of the string "Stop generating" in the HTML content of the main
-// element on the page. If the string is found, it returns true,
-// indicating that a reply is being displayed. Otherwise, it returns
-// false.
+// element on the page. 
 async function is_replying (page) {
     // Note: This code assumes that `Stop generating' appers during
     // the reply is being displayed.
@@ -98,11 +78,7 @@ async function is_replying (page) {
 }
 
 // This function takes a string buf as input and fills the textarea in
-// the ChatGPT page with that string, and submits the form. The
-// function internally calls current_page() function to get the
-// Puppeteer page object, then finds the textarea element in the page,
-// modifies its value to the given string, and simulates pressing the
-// Enter key to submit the form. There is no explicit return value.
+// the ChatGPT page with that string, and submits the form.
 async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
     const page = await current_page();
@@ -116,10 +92,7 @@ async function send (buf) {
 // The recv function extracts the reply from the current page and
 // converts it to plain text using the convert library. If the debug
 // flag is set, it prints the HTML reply instead of the plain text
-// version. It also replaces consecutive newlines with a single
-// newline. Finally, if the reply is finished, it prints EOF to
-// indicate the end of the reply. The function does not take any
-// arguments and has no return value.
+// version. 
 async function recv (debug) {
     const page = await current_page();
     let html = await extract_reply(page);
