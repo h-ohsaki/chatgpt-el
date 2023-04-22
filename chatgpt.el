@@ -22,9 +22,6 @@
   "The name of the program communicating with the Chromium using
   the CDP protocol.")
 
-(defvar chatgpt-buffer-name "*ChatGPT reply*"
-  "The name of the buffer to display the response from ChatGPT.")
-
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues.")
     (?s . "Summarize the following in a plain Japanese.")
@@ -34,31 +31,25 @@
     (?P . "以下の文章の誤りを直して、変更点の一覧を出力して。")))
 
 (defvar chatgpt-font-lock-keywords
-  '(;; comments
-    ("^[#;%].*"  . font-lock-comment-face)
-    ;; headers
-    ("^.*¶$" . font-lock-function-name-face)
-    ("^\\*+ +.*$" . font-lock-function-name-face)
-    ;; itemize
+  '(;; comment
+    ("^[#;%].+"  . font-lock-comment-face)
+    ;; header
+    ("^Q\\. .+" . font-lock-function-name-face)
+    ("^\\S.+?[:：]$"  . font-lock-function-name-face)
+    ;; item
     ("^ *[0-9.]+ " . font-lock-type-face)
-    ("^ *[-*] .+$" . font-lock-string-face)
-    ;; code
-    ("`+.+?`+" . font-lock-type-face)
-    ;; paren
-    ("\\[.+?\\]" . font-lock-variable-name-face)
-    ("{.+?}" . font-lock-keyword-face)
-    ;; symbols
-    ("[$()\\]" . font-lock-type-face)
-    ("\\(--+\\||\\)" . font-lock-comment-face) ;; table
+    ("^ *[*-] .*$" . font-lock-string-face)
     ;; constants
-    ("[A-Z_]\\{3,\\}" . font-lock-constant-face)
-    ;; LaTeX macros
-    ("\\\\\\w+" . font-lock-keyword-face)
-    ;; string
-    ("\".*?\"" . font-lock-string-face)
-    ("'.*?'" . font-lock-string-face)
-    ("`.*?'" . font-lock-string-face)
-    ("‘.*?’" . font-lock-string-face)))
+    ("[A-Z_]\\{3,\\}" . font-lock-constant-face)	
+    ;; strings
+    ("「.+?」" . font-lock-constant-face)
+    ("\".+?\"" . font-lock-string-face)))
+
+(defvar chatgpt--buffer-name "*ChatGPT reply*"
+  "The name of the buffer to display the reply from ChatGPT.")
+
+(defvar chatgpt--tmpbuffer-name "*ChatGPT temp*"
+  "The name of the temporary buffer to receive the reply from ChatGPT.")
 
 (defvar chatgpt--last-query nil
   "The last query sent to the server.")
@@ -66,26 +57,30 @@
 (defvar chatgpt--last-reply nil
   "The last reply returned by the server.")
 
+(defvar chatgpt--process nil
+  "An instance of `chatgpt` script to retrieve the reply.")
+
 (defvar chatgpt--timer nil
-  "A timer event to retriee the response from the server.")
+  "A timer event to retriee the reply from the server.")
 
 (defvar chatgpt--timer-count nil)
 
 ;; (chatgpt-send-string "which of Emacs or vi is better?")
 ;; (chatgpt-send-string "what is Emacs's interesting history?")
 (defun chatgpt-send-string (query)
-  "Send a query string QUERY to ChatGPT via chromium."
+  "Send query QUERY to the ChatGPT server via chromium."
   (interactive)
-  ;; Compose a query string in a temporary buffer.
+  ;; Compose a query in a temporary buffer.
   (with-temp-buffer
     (insert query)
-    (setq chatgpt--last-query query)
     ;; Provide chromium with the query string.
     (call-process-region (point-min) (point-max) chatgpt-prog
-			 nil nil nil "-s")))
+			 nil nil nil "-s"))
+  (setq chatgpt--last-query query))
 
 ;; (chatgpt--current-paragraph)
 (defun chatgpt--current-paragraph ()
+  "Return a query string at around the current point."
   (buffer-substring-no-properties
    (save-excursion
      (forward-paragraph -1)
@@ -98,79 +93,96 @@
 	 (forward-char -1))
      (point))))
 
+;; (chatgpt-send 1)
 (defun chatgpt-send (arg)
-  "Send the query around the point to ChatGPT via Chromium.  If
-the mark is active, send the hlghlighted region as a query."
+  "Send the query around the point to the ChatGPT server.  If the
+mark is active, send the hlghlighted region as a query."
   (interactive "P")
-  (let* ((query (if mark-active
-		    (buffer-substring-no-properties (region-beginning) (region-end))
-		  ;; When mark is inactive.
-		  (chatgpt--current-paragraph)))
-	 (buf (get-buffer-create chatgpt-buffer-name)))
-    ;; Change behavior when prefix is provided.
+  (let* ((query
+	  (if mark-active
+	      (buffer-substring-no-properties (region-beginning) (region-end))
+	    ;; When mark is inactive.
+	    (chatgpt--current-paragraph)))
+	 (buf (get-buffer-create chatgpt--buffer-name)))
+    ;; Change the behavior when prefix is provided.
     (cond ((equal arg '(16))
 	   (setq query "続き"))
 	  (arg
 	   (let* ((ch (read-char "Prefix [w]what/[s]ummary/[j]apanese/[e]nglish/[p/P]roofread: "))
 		  (val (assoc ch chatgpt-prefix-alist)))
-	     (setq query (concat (cdr val) query)))))
+	     (setq query (concat (cdr val) " " query)))))
     (chatgpt-send-string query)
-    (chatgpt-start-monitor query)))
+    (chatgpt--start-monitor)))
 
-;; (chatgpt-start-monitor)
-(defun chatgpt-start-monitor (query)
-  "Start a monitor to watch the output (i.e., reply) from
-ChatGPT."
+;; (chatgpt-lookup "Emacs")
+(defun chatgpt-lookup (query)
+  (interactive (list (read-string "ChatGPT lookup: " 
+				  (thing-at-point 'word))))
+    (chatgpt-send-string query)
+    (chatgpt--start-monitor))
+
+;; (chatgpt--start-monitor)
+(defun chatgpt--start-monitor ()
+  "Start monitoring the reply from the ChatGPT server."
   (interactive)
-  (let ((buf (get-buffer-create chatgpt-buffer-name)))
-    ;; Prepare and display the reply buffer.
+  ;; Only for debugging.
+  (kill-buffer chatgpt--buffer-name)
+  (let ((buf (get-buffer-create chatgpt--buffer-name)))
+    ;; Initialize the reply buffer.
     (with-current-buffer buf
+      (erase-buffer)
       (setq font-lock-defaults
 	    '(chatgpt-font-lock-keywords 'keywords-only nil))
-      (font-lock-mode 1)
-    ;;
+      (font-lock-mode 1))
+    ;; Display in the other window.
     (delete-other-windows)
     (split-window)
-    (set-window-buffer (next-window) buf)))
+    (set-window-buffer (next-window) buf)
+    ;; Schedule the next timer event.
     (setq chatgpt--timer-count 0)
-    (chatgpt--sched-timer-event))
-
-;; (chatgpt--parse-reply)
-(defun chatgpt--parse-reply ()
-  "Check the response for the last query from ChatGPT and return
-it as a string."
-  (interactive)
-  ;; Retrieve the reply for the last query.
-  (with-temp-buffer
-    (insert "Q. " chatgpt--last-query "\n\n")
-    (call-process chatgpt-prog nil t nil "-r")
-    (buffer-string)))
+    (chatgpt--sched-timer-event)))
 
 ;; (chatgpt-insert-reply)
 (defun chatgpt-insert-reply ()
-  "At the current point, insert the response for the last query
-from ChatGPT."
+  "At the current point, insert the reply for the last query from
+the ChatGPT server."
   (interactive)
-  (let ((reply (chatgpt--parse-reply)))
-    (insert reply)))
+  (insert chatgpt--last-reply))
 
-;; (chatgpt--timer-event)
-(defun chatgpt--timer-event ()
-  (let ((buf (get-buffer-create chatgpt-buffer-name))
-	(reply (chatgpt--parse-reply)))
-    (with-current-buffer buf
-      (if (string= chatgpt--last-reply reply) 
+(defun chatgpt--process-sentinel (proc event)
+  ;; Is process completed?
+  (when (string-match-p "finished" event)
+    (let* ((tmpbuf (get-buffer-create chatgpt--tmpbuffer-name))
+	   (reply (with-current-buffer tmpbuf
+		    (buffer-string))))
+      (if (string= reply chatgpt--last-reply)
 	  ;; No update.
 	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
 	;; Updated.
-	(erase-buffer)
-	(insert reply)
-	(setq chatgpt--last-reply reply)
-	(setq chatgpt--timer-count 0))
-      ;; Schedule next event if it seems reply is updating.
+	(let ((buf (get-buffer-create chatgpt--buffer-name)))
+	  (with-current-buffer buf
+	    (erase-buffer)
+	    (insert reply)
+	    (setq chatgpt--last-reply reply)
+	    (setq chatgpt--timer-count 0))))
+      ;; Schedule next event if it seems reply is in progress.
       (if (< chatgpt--timer-count 10)
 	  (chatgpt--sched-timer-event)))))
 
+;; (chatgpt--timer-event)
+(defun chatgpt--timer-event ()
+  ;; Stop the process if already running.
+  (if (memq chatgpt--process (process-list))
+      (kill-process chatgpt--process))
+  (let ((tmpbuf (get-buffer-create chatgpt--tmpbuffer-name)))
+    (with-current-buffer tmpbuf
+      (erase-buffer)
+      (insert "Q. " chatgpt--last-query "\n\n")
+      (setq chatgpt--process
+	    (start-process "chatgpt" tmpbuf chatgpt-prog "-r"))
+      (set-process-sentinel chatgpt--process
+			    'chatgpt--process-sentinel))))
+
 ;; (chatgpt--sched-timer-event)
 (defun chatgpt--sched-timer-event ()
-  (run-with-timer .5 nil 'chatgpt--timer-event))
+  (run-with-timer .2 nil 'chatgpt--timer-event))
