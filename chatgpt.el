@@ -64,6 +64,17 @@ headers, items, constants, and strings.  Each regular expression
 is paired with a font lock face, which determines the color and
 style of the highlighted text.")
 
+(defvar chatgpt-send-query-function 'chatgpt--send-query
+  "A low level function to send a query to the ChatGPT server.")
+
+(defvar chatgpt-start-recv-process-function 'chatgpt--start-recv-process
+  "A low level function to start a process that receives a reply
+  from the ChatGPT server.")
+
+(defvar chatgpt-extract-reply-function 'chatgpt--extract-reply
+  "A low level function to retrieve the reply received by the
+  process started by `chatgpt-start-recv-process-function`.")
+
 (defvar chatgpt--buffer-name "*ChatGPT reply*"
   "The name of the buffer to display the reply from ChatGPT.")
 
@@ -112,7 +123,7 @@ This function takes a string argument `query`, which represents
 the text of the query to be sent to the ChatGPT server. The query
 is passed to the ChatGPT program executable."
   (interactive)
-  (chatgpt--send-query query)
+  (funcall chatgpt-send-query-function query)
   (setq chatgpt--last-query query))
 
 ;; (chatgpt-query "Emacs")
@@ -230,7 +241,7 @@ schedules the next timer event using the
 `chatgpt--sched-timer-event` function."
   ;; Is process completed?
   (when (string-match-p "finished" event)
-    (let* ((reply (chatgpt--extract-reply)))
+    (let* ((reply (funcall chatgpt-extract-reply-function)))
       (if (string= reply chatgpt--last-reply)
 	  ;; No update.
 	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
@@ -268,7 +279,7 @@ regular intervals."
     (with-current-buffer tmpbuf
       (erase-buffer)
       (insert "Q. " chatgpt--last-query "\n\n")
-      (setq chatgpt--process (chatgpt--start-recv-process tmpbuf))
+      (setq chatgpt--process (funcall chatgpt-start-recv-process-function tmpbuf))
       (set-process-sentinel chatgpt--process
 			    'chatgpt--process-sentinel))))
 
