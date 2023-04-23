@@ -216,7 +216,7 @@ window."
     ;; Initialize the reply buffer.
     (with-current-buffer buf
       (erase-buffer)
-      (toggle-word-wrap 1)
+      (setq word-wrap t)
       (setq font-lock-defaults
 	    '(chatgpt-font-lock-keywords 'keywords-only nil))
       (font-lock-mode 1))
