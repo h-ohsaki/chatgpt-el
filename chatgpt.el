@@ -85,6 +85,24 @@ style of the highlighted text.")
 (defvar chatgpt--timer-count nil)
 
 ;; ----------------------------------------------------------------
+;; Low level interfaces.
+(defun chatgpt--send-query (query)
+  ;; Compose a query in a temporary buffer.
+  (with-temp-buffer
+    (insert query)
+    ;; Provide chromium with the query string.
+    (call-process-region (point-min) (point-max) chatgpt-prog
+			 nil nil nil "-s")))
+
+(defun chatgpt--start-recv-process (tmpbuf)
+  (start-process "chatgpt" tmpbuf chatgpt-prog "-r"))
+
+(defun chatgpt--extract-reply ()
+  (let* ((tmpbuf (get-buffer-create chatgpt--tmpbuffer-name)))
+    (with-current-buffer tmpbuf
+      (buffer-string))))
+
+;; ----------------------------------------------------------------
 ;; (chatgpt-send-query "which of Emacs or vi is better?")
 ;; (chatgpt-send-query "what is Emacs's interesting history?")
 (defun chatgpt-send-query (query)
@@ -94,12 +112,7 @@ This function takes a string argument `query`, which represents
 the text of the query to be sent to the ChatGPT server. The query
 is passed to the ChatGPT program executable."
   (interactive)
-  ;; Compose a query in a temporary buffer.
-  (with-temp-buffer
-    (insert query)
-    ;; Provide chromium with the query string.
-    (call-process-region (point-min) (point-max) chatgpt-prog
-			 nil nil nil "-s"))
+  (chatgpt--send-query query)
   (setq chatgpt--last-query query))
 
 ;; (chatgpt-query "Emacs")
@@ -217,9 +230,7 @@ schedules the next timer event using the
 `chatgpt--sched-timer-event` function."
   ;; Is process completed?
   (when (string-match-p "finished" event)
-    (let* ((tmpbuf (get-buffer-create chatgpt--tmpbuffer-name))
-	   (reply (with-current-buffer tmpbuf
-		    (buffer-string))))
+    (let* ((reply (chatgpt--extract-reply)))
       (if (string= reply chatgpt--last-reply)
 	  ;; No update.
 	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
@@ -234,9 +245,9 @@ schedules the next timer event using the
 	(setq chatgpt--last-reply reply)
 	(setq chatgpt--timer-count 0)))
     ;; Schedule next event if it seems reply is in progress.
-    (if (< chatgpt--timer-count 10)
+    (if (< chatgpt--timer-count 20)
 	(chatgpt--sched-timer-event))))
-
+  
 ;; (chatgpt--timer-event)
 (defun chatgpt--timer-event ()
   "Run an event that retrieves the reply from the ChatGPT server.
@@ -257,8 +268,7 @@ regular intervals."
     (with-current-buffer tmpbuf
       (erase-buffer)
       (insert "Q. " chatgpt--last-query "\n\n")
-      (setq chatgpt--process
-	    (start-process "chatgpt" tmpbuf chatgpt-prog "-r"))
+      (setq chatgpt--process (chatgpt--start-recv-process tmpbuf))
       (set-process-sentinel chatgpt--process
 			    'chatgpt--process-sentinel))))
 
@@ -267,3 +277,5 @@ regular intervals."
   "Schedule the next timer event to receive the reply from the
 ChatGPT server."
   (run-with-timer .2 nil 'chatgpt--timer-event))
+
+(provide 'chatgpt)
