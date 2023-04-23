@@ -142,5 +142,5 @@ that shown in your Chromium/Chrome.
 # FOR QUTEBROWSER USERS
 
 If you are a qutebrowser user instead of Chromium/Chrome, you can use
-**qutechat** (https://github.com/h-ohsaki/qutechat), a
-qutebrowser-version of **chatgpt-el**.
+**qutechat** (https://github.com/h-ohsaki/qutechat), an extension to
+**chatgpt-el** supporting qutebrowser.
