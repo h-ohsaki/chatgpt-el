@@ -158,7 +158,7 @@ and the reply is displayed in a separate buffer."
 		  (t
 		   (string-trim 
 		    (or (thing-at-point 'paragraph) "")))))
-      (setq query (read-string "ChatGPT lookup: " query)))
+      (setq query (read-string "ChatGPT query: " query)))
     (chatgpt-send-query (concat prefix query))
     (chatgpt--start-monitor)))
 
