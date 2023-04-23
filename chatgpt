@@ -49,7 +49,17 @@ async function current_page () {
 	const text = await page.waitForSelector('textarea');
 	await sleep(1000);
     }
+    await set_viewport(page);
     return page;
+}
+
+async function set_viewport (page) {
+    let viewport = await page.viewport();
+    if (viewport.width < 1440 / 2)
+	viewport.width = 1440 / 2;
+    if (viewport.height < 600)
+	viewport.width = 600;
+    await page.setViewport(viewport);
 }
 
 // This asynchronous function takes a page object as input and returns
