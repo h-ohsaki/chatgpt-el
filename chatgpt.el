@@ -189,14 +189,32 @@ list of options provided by the `chatgpt-prefix-alist` variable."
 	(concat prefix " ")
       nil)))
 
-;; (chatgpt-insert-reply)
-(defun chatgpt-insert-reply ()
+;; (chatgpt-insert-reply nil)
+;; (chatgpt-insert-reply t)
+(defun chatgpt-insert-reply (arg)
   "Insert the most recent ChatGPT reply at the current point.
 
 This function inserts the most recent reply from the ChatGPT
 server at the current point in the buffer. "
-  (interactive)
-  (insert chatgpt--last-reply))
+  (interactive "P")
+  (let (pnt)
+    (save-restriction
+      (narrow-to-region (point) (point))
+      ;; Prepare the reply.
+      (insert "Q. " chatgpt--last-query "\n\n")
+      (when arg
+	(insert "ChatGPT replied:\n"))
+      (setq pnt (point))
+      (insert chatgpt--last-reply)
+      ;; Remove trailing EOF marker.
+      (if (re-search-backward "\n\nEOF" nil t)
+	  (replace-match ""))
+      (when arg
+	;; (fill-region pnt (point-max))
+	(goto-char pnt)
+	(while (not (eobp))
+	  (insert "| ")
+	  (forward-line 1))))))
 
 ;; ----------------------------------------------------------------
 ;; (chatgpt--start-monitor)
@@ -278,7 +296,6 @@ regular intervals."
   (let ((tmpbuf (get-buffer-create chatgpt--tmpbuffer-name)))
     (with-current-buffer tmpbuf
       (erase-buffer)
-      (insert "Q. " chatgpt--last-query "\n\n")
       (setq chatgpt--process (funcall chatgpt-start-recv-process-function tmpbuf))
       (set-process-sentinel chatgpt--process
 			    'chatgpt--process-sentinel))))
