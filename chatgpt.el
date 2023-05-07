@@ -24,13 +24,15 @@ program executable. The ChatGPT program is responsible for
 sending queries to the ChatGPT server and receiving replies. ")
 
 (defvar chatgpt-prefix-alist
-  '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues.")
-    (?s . "Summarize the following in a plain Japanese.")
-    (?j . "Translate the following in Japanese in an academic writing style.")
-    (?e . "Translate the following in English in an academic writing style.")
-    (?p . "Proofread following text and summarize all suggested changes.")
-    (?P . "以下の文章の誤りを直して、変更点の一覧を出力して。")
-    (?d . "Write docstring for the following code."))
+  '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
+    (?s . "Summarize the following in a plain Japanese:")
+    (?j . "Translate the following in Japanese in a plain academic writing style:")
+    (?e . "Translate the following in English in a plain academic writing style:")
+    (?p . "Proofread following text and summarize all suggested changes:")
+    (?P . "以下の文章の誤りを直して、変更点の一覧を出力して:")
+    (?r . "Rewrite the following in a plain academic writing style:")
+    (?R . "List three recent and important papers in LaTeX's thebibliography environment.  Refer those papers in the following text using \cite command.")
+    (?d . "Write docstring for the following code:"))
   "A list of prefix codes for ChatGPT queries.
 
 This variable is a list of prefix codes that can be used to
@@ -75,6 +77,8 @@ style of the highlighted text.")
   "A low level function to retrieve the reply received by the
   process started by `chatgpt-start-recv-process-function`.")
 
+(defvar chatgpt-query-complete-hooks 'chatgpt-save-reply)
+  
 (defvar chatgpt--buffer-name "*ChatGPT reply*"
   "The name of the buffer to display the reply from ChatGPT.")
 
@@ -143,7 +147,8 @@ query.
 Once the query is determined, it is sent to the ChatGPT server,
 and the reply is displayed in a separate buffer."
   (interactive "P")
-  (let (prefix query)
+  (let ((prefix "")
+	query)
     (cond ((equal arg '(16))
 	   (setq query "続き"))
 	  (arg
@@ -158,7 +163,7 @@ and the reply is displayed in a separate buffer."
 		  (t
 		   (string-trim 
 		    (or (thing-at-point 'paragraph) "")))))
-      (setq query (read-string "ChatGPT query: " query)))
+      (setq query (read-string "ChatGPT query: " (concat prefix query))))
     (chatgpt-send-query (concat prefix query))
     (chatgpt--start-monitor)))
 
@@ -182,7 +187,7 @@ ChatGPT query. The prefix code is used to specify the type of
 query to send to the ChatGPT server, and it is selected from a
 list of options provided by the `chatgpt-prefix-alist` variable."
   (let* ((ch (read-char
-	      "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[d]oc): "))
+	      "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[r]ewrite/{R]efer/[d]oc): "))
 	 (elem (assoc ch chatgpt-prefix-alist))
 	 (prefix (cdr elem)))
     (if prefix
@@ -191,7 +196,7 @@ list of options provided by the `chatgpt-prefix-alist` variable."
 
 ;; (chatgpt-insert-reply nil)
 ;; (chatgpt-insert-reply t)
-(defun chatgpt-insert-reply (arg)
+(defun chatgpt-insert-reply (&optional arg)
   "Insert the most recent ChatGPT reply at the current point.
 
 This function inserts the most recent reply from the ChatGPT
@@ -201,20 +206,24 @@ server at the current point in the buffer. "
     (save-restriction
       (narrow-to-region (point) (point))
       ;; Prepare the reply.
-      (insert "Q. " chatgpt--last-query "\n\n")
       (when arg
-	(insert "ChatGPT replied:\n"))
+	(insert "Q. " chatgpt--last-query "\n\n")
+	(insert "A. "))
       (setq pnt (point))
       (insert chatgpt--last-reply)
       ;; Remove trailing EOF marker.
       (if (re-search-backward "\n\nEOF" nil t)
-	  (replace-match ""))
-      (when arg
-	;; (fill-region pnt (point-max))
-	(goto-char pnt)
-	(while (not (eobp))
-	  (insert "| ")
-	  (forward-line 1))))))
+	  (replace-match "")))))
+
+;; (chatgpt-save-reply)
+(defun chatgpt-save-reply ()
+  (interactive)
+  (let ((save-silently t)
+	(logfile "~/.chatgpt-log.org"))
+    (with-temp-buffer
+      (insert "\n")
+      (chatgpt-insert-reply 1)
+      (write-region (point-min) (point-max) logfile 'append))))
 
 ;; ----------------------------------------------------------------
 ;; (chatgpt--start-monitor)
@@ -260,6 +269,10 @@ schedules the next timer event using the
   ;; Is process completed?
   (when (string-match-p "finished" event)
     (let* ((reply (funcall chatgpt-extract-reply-function)))
+      ;; If ChatGPT is in failure, try to recover.
+      (if (string-match-p "Something went wrong. If this issue persists please contact us"
+			  reply)
+	  (call-process chatgpt-prog nil nil nil "-i"))
       (if (string= reply chatgpt--last-reply)
 	  ;; No update.
 	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
@@ -274,8 +287,9 @@ schedules the next timer event using the
 	(setq chatgpt--last-reply reply)
 	(setq chatgpt--timer-count 0)))
     ;; Schedule next event if it seems reply is in progress.
-    (if (< chatgpt--timer-count 20)
-	(chatgpt--sched-timer-event))))
+    (if (< chatgpt--timer-count 10)
+	(chatgpt--sched-timer-event)
+      (run-hooks 'chatgpt-query-complete-hooks))))
   
 ;; (chatgpt--timer-event)
 (defun chatgpt--timer-event ()
