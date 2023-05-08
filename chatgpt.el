@@ -31,7 +31,7 @@ sending queries to the ChatGPT server and receiving replies. ")
     (?p . "Proofread following text and summarize all suggested changes:")
     (?P . "以下の文章の誤りを直して、変更点の一覧を出力して:")
     (?r . "Rewrite the following in a plain academic writing style:")
-    (?R . "List three recent and important papers in LaTeX's thebibliography environment.  Refer those papers in the following text using \cite command.")
+    (?R . "List three important papers since 2000 in LaTeX's thebibliography environment.  Refer those papers in the following text using \\cite command.")
     (?d . "Write docstring for the following code:"))
   "A list of prefix codes for ChatGPT queries.
 
@@ -87,6 +87,10 @@ style of the highlighted text.")
 
 (defvar chatgpt--last-query nil
   "The last query sent to the server.")
+
+(defvar chatgpt--last-query-beg nil)
+
+(defvar chatgpt--last-query-end nil)
 
 (defvar chatgpt--last-reply nil
   "The last reply returned by the server.")
@@ -148,23 +152,34 @@ Once the query is determined, it is sent to the ChatGPT server,
 and the reply is displayed in a separate buffer."
   (interactive "P")
   (let ((prefix "")
-	query)
+	query beg-pos end-pos)
     (cond ((equal arg '(16))
 	   (setq query "続き"))
 	  (arg
 	   (setq prefix (chatgpt--read-prefix))))
     (unless query
-      (setq query
-	    (cond (mark-active
-		   (buffer-substring-no-properties
-		    (region-beginning) (region-end)))
-		  ((looking-at "\\w")
-		   (thing-at-point 'word))
-		  (t
-		   (string-trim 
-		    (or (thing-at-point 'paragraph) "")))))
+      (cond
+       ;; Region is selected.
+       (mark-active
+	(setq beg-pos (region-beginning))
+	(setq end-pos (region-end))
+	(setq query (buffer-substring-no-properties beg-pos end-pos)))
+       ;; A character follows the point.
+       ((looking-at "\\w")
+	(setq query (thing-at-point 'word)))
+       ;; Possibly, at the end line.
+       (t
+	(setq query (string-trim 
+		     (or (thing-at-point 'paragraph) "")))
+	(setq beg-pos (save-excursion
+			(search-backward query nil t)
+			(point)))
+	(setq end-pos (point))))
       (setq query (read-string "ChatGPT query: " (concat prefix query))))
     (chatgpt-send-query (concat prefix query))
+    ;; Record the region used as the query.
+    (setq chatgpt--last-query-beg beg-pos)
+    (setq chatgpt--last-query-end end-pos)
     (chatgpt--start-monitor)))
 
 ;; (chatgpt-lookup "Emacs")
@@ -202,18 +217,19 @@ list of options provided by the `chatgpt-prefix-alist` variable."
 This function inserts the most recent reply from the ChatGPT
 server at the current point in the buffer. "
   (interactive "P")
-  (let (pnt)
-    (save-restriction
-      (narrow-to-region (point) (point))
-      ;; Prepare the reply.
-      (when arg
-	(insert "Q. " chatgpt--last-query "\n\n")
-	(insert "A. "))
-      (setq pnt (point))
-      (insert chatgpt--last-reply)
-      ;; Remove trailing EOF marker.
-      (if (re-search-backward "\n\nEOF" nil t)
-	  (replace-match "")))))
+  ;; With C-u C-u prefix, delete the region used as the query.
+  (when (equal arg '(16))
+    (delete-region chatgpt--last-query-beg chatgpt--last-query-end))
+  (save-restriction
+    (narrow-to-region (point) (point))
+    ;; With C-u, tweak the reply for better readability.
+    (when (equal arg '(4))
+      (insert "Q. " chatgpt--last-query "\n\n")
+      (insert "A. "))
+    (insert (string-trim chatgpt--last-reply))
+    ;; Remove the trailing EOF marker.
+    (if (re-search-backward "\n\nEOF" nil t)
+	(replace-match ""))))
 
 ;; (chatgpt-save-reply)
 (defun chatgpt-save-reply ()
@@ -222,7 +238,7 @@ server at the current point in the buffer. "
 	(logfile "~/.chatgpt-log.org"))
     (with-temp-buffer
       (insert "\n")
-      (chatgpt-insert-reply 1)
+      (chatgpt-insert-reply '(4))
       (write-region (point-min) (point-max) logfile 'append))))
 
 ;; ----------------------------------------------------------------
