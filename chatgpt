@@ -32,13 +32,29 @@ async function sleep (ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+const exec = require('child_process').exec
+
+async function connect_to_browser () {
+    let browser;
+    while (true) {
+	try {
+	    // FIXME: Port number should be configurable.
+	    browser = await puppeteer.connect({browserURL: 'http://localhost:9000'});
+	    return browser;
+	}
+	catch (err) {
+	    exec('pidof chromium || chromium --remote-debugging-port=9000', function (error, stdout, stderr) {});
+	    await sleep(500);
+	}
+    }
+}
+
 // This function returns a Puppeteer page object for the current tab
 // in the browser connected to the ChatGPT website. If the website is
 // not already open in the current tab, it opens the website and waits
 // for the textarea element to appear on the page.
 async function current_page () {
-    // FIXME: Port number should be configurable.
-    const browser = await puppeteer.connect({browserURL: 'http://localhost:9000'});
+    const browser = await connect_to_browser();
     // Find the page in the first tab.
     const pages = await browser.pages();
     let page = pages[0];
