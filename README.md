@@ -42,6 +42,7 @@ the program according to your environment.
 
 - Chromium or Chrome browser (or other browsers supporting the CDP protocol).
 - Node.js (https://nodejs.org/en).
+- Puppeteer module (https://pptr.dev/)
 - html-to-text moudle (https://github.com/html-to-text/node-html-to-text)
 
 # INSTALLATION
@@ -77,11 +78,11 @@ modules such as Puppeteer and html-to-text must be accessible from
 2. Visit ChatGPT (https://chat.openai.com/) in Chromium/Chrome, and
    login with your OpenAI account.
 
-3. On Emacs, move the point (i.e., the cursor in Emacs) around the
-   paragraph of the query.  Alternatively, you can select the region
-   containing the query.  Then, type `C-c q` or execute `M-x
-   chatgpt-query`.  With a prefix argument (e.g., `C-u C-c C-q`), you
-   will be prompted what query prefix is prepended to the query.
+3. On Emacs, move the point (i.e., the cursor in Emacs) at the end of
+   the query text.  Alternatively, you can select the region
+   containing the query text.  Then, type `C-c q` or execute `M-x
+   chatgpt-query`.  With a prefix argument (e.g., `C-u C-c q`), you
+   will be prompted what query prefix is prepended to the query text.
 
 4. The query is automatically submitted to ChatGPT in your
    Chromium/Chrome.  The reply from ChatGPT will be displayed in
@@ -90,6 +91,14 @@ modules such as Puppeteer and html-to-text must be accessible from
 5. Once the reply is displayed, type `C-c Q` or execute M-x
    chatgpt-insert-reply from Emacs.  The reply from ChatGPT is
    inserted at the current point.
+
+6. If there are further responses from ChatGTP, type `C-u C-u C-c q`
+   to display the continuation of ChatGTP's response in the buffer of
+   Emacs.
+   
+7. When requesting translation or proofreading of a text for ChatGPT,
+   it is possible to replace the query text with the response from
+   ChatGTP. To do this, type `C-u C-u C-c Q`.
 
 # TROUBLE SHOOTING
 
