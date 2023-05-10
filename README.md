@@ -52,7 +52,7 @@ the program according to your environment.
 > sudo npm i -g html-to-text
 > git clone https://github.com/h-ohsaki/chatgpt-el.git
 > cd chatgpt-el
-> sudo intall -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
+> sudo install -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
 (autoload 'chatgpt-query "chatgpt" nil t)
