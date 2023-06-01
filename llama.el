@@ -20,7 +20,7 @@
 
 (require 'chatgpt)
 
-(defvar llama-prog "/src/llama.cpp/main"
+(defvar llama-prog "/src/llama/llama.cpp/main"
   "The name of the qutebrowser userscript.")
 
 ;; ----------------------------------------------------------------
@@ -32,7 +32,7 @@
 		  :buffer buf
 		  :command
 		  (list llama-prog
-			"--model" "/src/alpaca.cpp/ggml-alpaca-7b-q4.bin"
+			"--model" "/src/llama/alpaca.cpp/ggml-alpaca-7b-q4.bin"
 			"-p" (concat query "\n")
 			"-t" "8"
 			"-n" "128")
