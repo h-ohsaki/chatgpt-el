@@ -105,7 +105,9 @@ async function send (buf) {
     // Directly modify the value of textarea.
     // https://stackoverflow.com/questions/47966510/how-to-fill-an-input-field-using-puppeteer
     await page.$eval('textarea', (el, buf) => el.value = buf, buf);
+    await text.press(' ');
     await text.press('Enter');
+    // await page.click('button.absolute.p-1.rounded-md');
 }
 
 // The recv function extracts the reply from the current page and
