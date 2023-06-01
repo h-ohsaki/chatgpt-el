@@ -286,8 +286,10 @@ schedules the next timer event using the
   (when (string-match-p "finished" event)
     (let* ((reply (funcall chatgpt-extract-reply-function)))
       ;; If ChatGPT is in failure, try to recover.
-      (if (string-match-p "Something went wrong. If this issue persists please contact us"
-			  reply)
+      (if (or (string-match-p "Something went wrong. If this issue persists please contact us"
+			      reply)
+	      (string-match-p "The message you submitted was too long, please reload"
+			      reply))
 	  (call-process chatgpt-prog nil nil nil "-i"))
       (if (string= reply chatgpt--last-reply)
 	  ;; No update.
