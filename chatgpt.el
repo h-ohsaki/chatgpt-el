@@ -31,7 +31,7 @@ sending queries to the ChatGPT server and receiving replies. ")
     (?p . "Proofread following text:")
     (?P . "以下の文章の誤りを直して、変更点の一覧を出力して:")
     (?r . "Rewrite the following in a plain academic writing style:")
-    (?R . "List three important papers since 2000 in LaTeX's thebibliography environment.  Refer those papers in the following text using \\cite command.")
+    (?R . "###以下の文章を、1 章の内容に合うように修正して。用語を1章のものに統一して。論理がわかりづらい箇所は明快な論理に書き替えて。Write in English in a plain academic writing style.###")
     (?d . "Write docstring for the following code:"))
   "A list of prefix codes for ChatGPT queries.
 
@@ -202,7 +202,7 @@ ChatGPT query. The prefix code is used to specify the type of
 query to send to the ChatGPT server, and it is selected from a
 list of options provided by the `chatgpt-prefix-alist` variable."
   (let* ((ch (read-char
-	      "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[r]ewrite/{R]efer/[d]oc): "))
+	      "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[r]ewrite/{R]ewrite/[d]oc): "))
 	 (elem (assoc ch chatgpt-prefix-alist))
 	 (prefix (cdr elem)))
     (if prefix
