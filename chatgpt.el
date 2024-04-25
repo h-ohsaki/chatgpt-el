@@ -31,7 +31,7 @@ sending queries to the ChatGPT server and receiving replies. ")
     (?p . "Proofread following text:")
     (?P . "以下の文章の誤りを直して、変更点の一覧を出力して:")
     (?r . "Rewrite the following in a plain academic writing style:")
-    (?R . "###以下の文章を、1 章の内容に合うように修正して。用語を1章のものに統一して。論理がわかりづらい箇所は明快な論理に書き替えて。Write in English in a plain academic writing style.###")
+    (?R . "###以下の文章を、1章の内容に合うように修正して。用語を1章のものに統一して。論理がわかりづらい箇所は明快な論理に書き替えて。平易で学術的な表現の英語にして。LaTeXのコマンドはそのままにして。\citeの前の空白はすべて~に変更して。###")
     (?d . "Write docstring for the following code:"))
   "A list of prefix codes for ChatGPT queries.
 
@@ -218,12 +218,13 @@ This function inserts the most recent reply from the ChatGPT
 server at the current point in the buffer. "
   (interactive "P")
   ;; With C-u C-u prefix, delete the region used as the query.
-  (when (equal arg '(16))
+  (when (and (equal arg '(4))
+	     (< chatgpt--last-query-end (point-max)))
     (delete-region chatgpt--last-query-beg chatgpt--last-query-end))
   (save-restriction
     (narrow-to-region (point) (point))
     ;; With C-u, tweak the reply for better readability.
-    (when (equal arg '(4))
+    (when (equal arg '(16))
       (insert "Q. " chatgpt--last-query "\n\n")
       (insert "A. "))
     (insert (string-trim chatgpt--last-reply))
