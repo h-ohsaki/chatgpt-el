@@ -61,8 +61,8 @@ async function current_page () {
     // FIXME: Avoid hard-coding.
     // Open ChatGPT if not already visiting.
     const url = page.url();
-    if (url.indexOf('chat.openai.com') < 0) {
-	await page.goto('https://chat.openai.com/');
+    if (url.indexOf('chatgpt.com') < 0) {
+	await page.goto('https://chatgpt.com/');
 	const text = await page.waitForSelector('textarea');
 	await sleep(1000);
     }
