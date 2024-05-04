@@ -176,10 +176,10 @@ and the reply is displayed in a separate buffer."
 			(point)))
 	(setq end-pos (point))))
       (setq query (read-string "ChatGPT query: " (concat prefix query))))
-    (chatgpt-send-query (concat prefix query))
     ;; Record the region used as the query.
     (setq chatgpt--last-query-beg beg-pos)
     (setq chatgpt--last-query-end end-pos)
+    (chatgpt-send-query (concat prefix query))
     (chatgpt--start-monitor)))
 
 ;; (chatgpt-lookup "Emacs")
@@ -300,8 +300,9 @@ schedules the next timer event using the
 	      last-pos)
 	  (with-current-buffer buf
 	    (setq last-pos (point))
-	    (erase-buffer)
-	    (insert reply)
+	    (save-excursion
+	      (erase-buffer)
+	      (insert reply))
 	    (goto-char last-pos)))
 	(setq chatgpt--last-reply reply)
 	(setq chatgpt--timer-count 0)))
