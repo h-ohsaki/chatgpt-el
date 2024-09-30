@@ -175,6 +175,8 @@ and the reply is displayed in a separate buffer."
 			(search-backward query nil t)
 			(point)))
 	(setq end-pos (point))))
+      ;; Remove the preceeding Q.
+      (setq query (replace-regexp-in-string "^Q\\. *" "" query))
       (setq query (read-string "ChatGPT query: " (concat prefix query))))
     ;; Record the region used as the query.
     (setq chatgpt--last-query-beg beg-pos)
@@ -218,13 +220,13 @@ This function inserts the most recent reply from the ChatGPT
 server at the current point in the buffer. "
   (interactive "P")
   ;; With C-u C-u prefix, delete the region used as the query.
-  (when (and (equal arg '(4))
+  (when (and (equal arg '(16))
 	     (< chatgpt--last-query-end (point-max)))
     (delete-region chatgpt--last-query-beg chatgpt--last-query-end))
   (save-restriction
     (narrow-to-region (point) (point))
     ;; With C-u, tweak the reply for better readability.
-    (when (equal arg '(16))
+    (when (equal arg '(4))
       (insert "Q. " chatgpt--last-query "\n\n")
       (insert "A. "))
     (insert (string-trim chatgpt--last-reply))
@@ -238,7 +240,7 @@ server at the current point in the buffer. "
   (let ((save-silently t)
 	(logfile "~/.chatgpt-log.org"))
     (with-temp-buffer
-      (insert "\n")
+      (insert "\n\n")
       (chatgpt-insert-reply '(4))
       (write-region (point-min) (point-max) logfile 'append))))
 
