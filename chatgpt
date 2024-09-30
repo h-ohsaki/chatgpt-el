@@ -63,7 +63,7 @@ async function current_page () {
     const url = page.url();
     if (url.indexOf('chatgpt.com') < 0) {
 	await page.goto('https://chatgpt.com/');
-	const text = await page.waitForSelector('textarea');
+	const text = await page.waitForSelector('#prompt-textarea > p');
 	await sleep(1000);
     }
     // Chaing view port causes flickering?
@@ -74,13 +74,13 @@ async function current_page () {
 // This asynchronous function takes a page object as input and returns
 // the HTML content of the last reply from ChatGPT server.
 async function extract_reply (page) {
-    // Note: All replies are in DIV tags with markdown class.
-    const elems = await page.$$('div.items-start');
+    // Note: All replies are in DIV tags with data-message-author-role field.
+    const elems = await page.$$('div[data-message-author-role="assistant"]');
     const elem = elems[elems.length - 1];
     // Replies might be empty.
     if (!elem)
 	return '';
-    const html = await page.evaluate(e => e.innerHTML, elem);
+    const html = await page.evaluate(el => el.innerHTML, elem);
     return html;
 }
     
@@ -92,7 +92,7 @@ async function is_replying (page) {
     // Note: This code assumes that `Stop generating' appers during
     // the reply is being displayed.
     const main = await page.$('main');
-    const html = await page.evaluate(b => b.innerHTML, main);
+    const html = await page.evaluate(el => el.innerHTML, main);
     return html.includes('Stop generating');
 }
 
@@ -101,15 +101,14 @@ async function is_replying (page) {
 async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
     const page = await current_page();
-    const text = await page.$('textarea');
-    // Directly modify the value of textarea.
-    // https://stackoverflow.com/questions/47966510/how-to-fill-an-input-field-using-puppeteer
-    await page.$eval('textarea', (el, buf) => el.value = buf, buf);
+    // Note: Input field is P tag surrounded by DIV with ID of prompt-textarea.
+    // Directly modify the content of P tag.
+    // https://stackoverflow.com/questions/48513066/is-it-possible-to-modify-an-element-in-the-dom-with-puppeteer-before-creating-a
+    await page.$eval('#prompt-textarea > p',
+		     (el, buf) => el.innerText = buf, buf);
     await sleep(250);
-    await text.press(' ');
-    await sleep(250);
-    await text.press('Enter');
-    // await page.click('button.absolute.p-1.rounded-md');
+    // Note: Submit button has the data-testid field.
+    await page.click('button[data-testid="send-button"]');
 }
 
 // The recv function extracts the reply from the current page and
