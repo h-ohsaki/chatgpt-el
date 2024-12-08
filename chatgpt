@@ -39,11 +39,14 @@ async function connect_to_browser () {
     while (true) {
 	try {
 	    // FIXME: Port number should be configurable.
-	    browser = await puppeteer.connect({browserURL: 'http://localhost:9000'});
+	    browser = await puppeteer.connect({
+		browserURL: 'http://localhost:9000',
+		defaultViewport: null,
+	    });
 	    return browser;
 	}
 	catch (err) {
-	    exec('pidof chromium || chromium --remote-debugging-port=9000', function (error, stdout, stderr) {});
+	    exec('pidof google-chrome || google-chrome --remote-debugging-port=9000', function (error, stdout, stderr) {});
 	    await sleep(500);
 	}
     }
