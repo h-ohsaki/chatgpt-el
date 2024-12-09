@@ -27,7 +27,6 @@ function die (msg='aborted') {
     process.exit(1);
 }
     
-// This function provides a delay of a certain number of milliseconds.
 async function sleep (ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -46,36 +45,31 @@ async function connect_to_browser () {
 	    return browser;
 	}
 	catch (err) {
-	    exec('pidof google-chrome || google-chrome --remote-debugging-port=9000', function (error, stdout, stderr) {});
+	    exec('google-chrome --remote-debugging-port=9000', function (error, stdout, stderr) {});
 	    await sleep(500);
 	}
     }
 }
 
-// This function returns a Puppeteer page object for the current tab
-// in the browser connected to the ChatGPT website. If the website is
-// not already open in the current tab, it opens the website and waits
-// for the textarea element to appear on the page.
 async function current_page () {
     const browser = await connect_to_browser();
-    // Find the page in the first tab.
     const pages = await browser.pages();
-    let page = pages[0];
-    // FIXME: Avoid hard-coding.
-    // Open ChatGPT if not already visiting.
-    const url = page.url();
-    if (url.indexOf('chatgpt.com') < 0) {
-	await page.goto('https://chatgpt.com/');
-	const text = await page.waitForSelector('#prompt-textarea > p');
-	await sleep(1000);
+    for (const page of pages) {
+	// FIXME: Avoid hard-coding.
+	const url = page.url();
+	if (url.indexOf('chatgpt.com') > 0) {
+	    await page.bringToFront();
+	    return page;
+	}
     }
-    // Chaing view port causes flickering?
-    // await page.setViewport({width: 900, height: 600});
+    // Open ChatGPT if not already visiting.
+    let page = pages[0];
+    await page.bringToFront();
+    await page.goto('https://chatgpt.com/');
+    const text = await page.waitForSelector('#prompt-textarea > p');
     return page;
 }
 
-// This asynchronous function takes a page object as input and returns
-// the HTML content of the last reply from ChatGPT server.
 async function extract_reply (page) {
     // Note: All replies are in DIV tags with data-message-author-role field.
     const elems = await page.$$('div[data-message-author-role="assistant"]');
@@ -86,25 +80,11 @@ async function extract_reply (page) {
     const html = await page.evaluate(el => el.innerHTML, elem);
     return html;
 }
-    
-// This function checks whether a reply is currently being displayed
-// in a given Puppeteer page. It does so by looking for the presence
-// of the string "Stop generating" in the HTML content of the main
-// element on the page. 
-async function is_replying (page) {
-    // Note: This code assumes that `Stop generating' appers during
-    // the reply is being displayed.
-    const main = await page.$('main');
-    const html = await page.evaluate(el => el.innerHTML, main);
-    return html.includes('Stop generating');
-}
 
-// This function takes a string buf as input and fills the textarea in
-// the ChatGPT page with that string, and submits the form.
 async function send (buf) {
     // Fill the textarea with string BUF and submit the form.
     const page = await current_page();
-    // Note: Input field is P tag surrounded by DIV with ID of prompt-textarea.
+    // Note: Input field is the P tag.
     // Directly modify the content of P tag.
     // https://stackoverflow.com/questions/48513066/is-it-possible-to-modify-an-element-in-the-dom-with-puppeteer-before-creating-a
     await page.$eval('#prompt-textarea > p',
@@ -114,14 +94,10 @@ async function send (buf) {
     await page.click('button[data-testid="send-button"]');
 }
 
-// The recv function extracts the reply from the current page and
-// converts it to plain text using the convert library. If the debug
-// flag is set, it prints the HTML reply instead of the plain text
-// version. 
 async function recv (debug) {
     const page = await current_page();
     let html = await extract_reply(page);
-    html = html.replaceAll(/<button.*?<\/button>/g, '');
+    // html = html.replaceAll(/<button.*?<\/button>/g, '');
     let text = convert.convert(html, {
         preserveNewlines: true,
         wordwrap: false,
@@ -130,9 +106,6 @@ async function recv (debug) {
 	text = html;
     text = text.replaceAll(/\n{3,}/g, '\n\n');
     console.log(text)
-    if (!await is_replying(page)) {
-	console.log('\nEOF')
-    }
 }
 
 // argv[2] is the first user-specified argument.
