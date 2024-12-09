@@ -1,0 +1,159 @@
+#!/usr/bin/env node
+
+// This is a Node.js script that interacts with the ChatGPT server
+// using Puppeteer, a Node.js library for controlling a headless
+// Chrome or Chromium browser. The script provides two modes of
+// operation: "send" mode and "receive" mode. 
+
+// In send mode, the script reads a query from standard input, sends
+// the query to the ChatGPT server via the browser, and exits. 
+
+// In receive mode, the script waits for a reply from the ChatGPT
+// server via the browser, extracts the reply from the browser's HTML,
+// converts it to plain text using the html-to-text Node.js library,
+// and outputs the plain text to standard output. 
+
+// The script also provides an optional "-i" mode to reload the
+// ChatGPT page in the browser. 
+
+// https://pptr.dev/
+const readline = require('readline');
+const puppeteer = require('puppeteer');
+const convert = require('html-to-text');
+
+// This function is used for debugging purposes.
+function die (msg='aborted') {
+    console.log('** ', msg);
+    process.exit(1);
+}
+    
+async function sleep (ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+const exec = require('child_process').exec
+
+async function connect_to_browser () {
+    let browser;
+    while (true) {
+	try {
+	    // FIXME: Port number should be configurable.
+	    browser = await puppeteer.connect({
+		browserURL: 'http://localhost:9000',
+		defaultViewport: null,
+	    });
+	    return browser;
+	}
+	catch (err) {
+	    exec('google-chrome --remote-debugging-port=9000', function (error, stdout, stderr) {});
+	    await sleep(500);
+	}
+    }
+}
+
+async function current_page () {
+    const browser = await connect_to_browser();
+    const pages = await browser.pages();
+    for (const page of pages) {
+	// FIXME: Avoid hard-coding.
+	const url = page.url();
+	if (url.indexOf('gemini.google.com') > 0) {
+	    await page.bringToFront();
+	    return page;
+	}
+    }
+    // Open Gemini if not already visiting.
+    let page = pages[0];
+    await page.bringToFront();
+    await page.goto('https://gemini.google.com/');
+    const text = await page.waitForSelector('div.textarea');
+    return page;
+}
+
+async function extract_reply (page) {
+    // Note: All replies are in DIV tags with data-message-author-role field.
+    const elems = await page.$$('div.response-content');
+    const elem = elems[elems.length - 1];
+    // Replies might be empty.
+    if (!elem)
+	return '';
+    const html = await page.evaluate(el => el.innerHTML, elem);
+    return html;
+}
+
+async function is_replying (page) {
+    return true;
+    // FIXME: This code doesn't work.
+    const input = await page.$('input-area-content');
+    const html = await page.evaluate(el => el.innerHTML, input);
+    return html.includes('Stop response');
+}
+
+async function send (buf) {
+    // Fill the textarea with string BUF and submit the form.
+    const page = await current_page();
+    // Note: Input field is the P tag.
+    // Directly modify the content of P tag.
+    // https://stackoverflow.com/questions/48513066/is-it-possible-to-modify-an-element-in-the-dom-with-puppeteer-before-creating-a
+    await page.$eval('div.textarea',
+		     (el, buf) => el.innerText = buf, buf);
+    await sleep(250);
+    // Note: Submit button has the data-testid field.
+    await page.click('mat-icon[fonticon="send"]');
+}
+
+async function recv (debug) {
+    const page = await current_page();
+    let html = await extract_reply(page);
+    // html = html.replaceAll(/<button.*?<\/button>/g, '');
+    let text = convert.convert(html, {
+        preserveNewlines: true,
+        wordwrap: false,
+    });
+    if (debug)
+	text = html;
+    text = text.replaceAll(/\n{3,}/g, '\n\n');
+    console.log(text)
+    if (!await is_replying(page)) {
+	console.log('\nEOF')
+    }
+}
+
+// argv[2] is the first user-specified argument.
+const mode = process.argv[2];
+const debug = (process.argv.length >= 4);
+
+if (mode == '-i') {
+    (async () => {
+	const page = await current_page();
+	await page.reload();
+	process.exit(0);
+    })();
+}
+
+// Send mode.
+if (mode == '-s') {
+    // Read lines from STDIN.
+    const rl = readline.createInterface({
+	input: process.stdin,
+	output: process.stdout
+    });
+    let buf = '';
+    rl.on('line', function (line) {
+	buf += line + '\n';
+    });
+    rl.on('close', function() {
+	(async () => {
+	    await send(buf);
+	    process.exit(0);
+	})();
+    });
+}
+
+// Receive mode.
+if (mode == '-r') {
+    (async () => {
+	await recv(debug);
+	process.exit(0);
+    })();
+}
