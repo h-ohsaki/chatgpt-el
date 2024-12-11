@@ -31,7 +31,9 @@ async function connect_to_browser () {
 }
 
 async function current_page () {
+    debug("# connecting...");
     const browser = await connect_to_browser();
+    debug("opening...");
     const pages = await browser.pages();
     for (const page of pages) {
 	// FIXME: Avoid hard-coding.
@@ -70,11 +72,8 @@ function display_diff (last_reply, reply) {
 }
 
 async function send_query (query) {
-    debug("# connecting...");
-    debug("done / opening...");
     const page = await current_page();
-
-    debug("done / sending...");
+    debug("sending...");
     await page.$eval('#prompt-textarea > p',
 		     (el, str) => el.innerText = str, query);
     // Note: Submit button has the data-testid field.
@@ -93,7 +92,7 @@ async function send_query (query) {
 
     let last_reply = '';
     let retry_count = 0;
-    // Loop 2 seconds after the stop button disapper.
+    // Loop one second after the stop button disapper.
     while (retry_count < 10) {
 	if (!await is_replying(page))
 	    retry_count++;
@@ -102,7 +101,7 @@ async function send_query (query) {
 	    display_diff (last_reply, reply);
 	    last_reply = reply;
 	}
-	await sleep(200);
+	await sleep(100);
     }
     // Display the last line.
     const lines = reply.split('\n');
