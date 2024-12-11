@@ -74,39 +74,55 @@ async function get_text (page, elem) {
     return text;
 }
 
+async function is_replying (page) {
+    // FIXME: This code doesn't work.
+    const button = await page.$('button[data-testid="stop-button"]');
+    return button;
+}
+
+function display_diff (last_reply, reply) {
+    let last_lines = last_reply.split('\n');
+    let lines = reply.split('\n');
+    for (let n = last_lines.length - 1; n < lines.length - 1; n++)
+	console.log(lines[n]);
+}
+
 async function send_query (query) {
+    console.log('connecting to the browser...')
     const page = await current_page();
+    console.log('sending query...')
     await page.$eval('#prompt-textarea > p',
 		     (el, str) => el.innerText = str, query);
-    await sleep(100);
     // Note: Submit button has the data-testid field.
     const button = await page.waitForSelector('button[data-testid="send-button"]');
     await button.click();
 
-    let elem;
-    while (true) {
-	let elems = await page.$$('div[data-message-author-role="assistant"]');
-	elem = elems[elems.length - 1];
-	let text = await get_text (page, elem);
-	if (text.length < 500)
-	    break;
+    // Wait until reply starts displaying.
+    while (!await is_replying(page)) {
 	await sleep(200);
     }
+    console.log('receiving the reply...')
+    // Locate the DIV tag containing the reply.
+    let elems = await page.$$('div[data-message-author-role="assistant"]');
+    let elem = elems[elems.length - 1];
 
     let last_reply = '';
     let count = 0;
+    let busy = true;
+    // Loop 2 seconds after the stop button disapper.
     while (count < 10) {
-	reply = await get_text (page, elem);
-	reply = reply.replace(/\n/g, '\\n\n');
-	console.log(reply.length, last_reply.length);
-	if (reply.length > last_reply.length) { // Any addition?
-	    console.log(reply);
-	    last_reply = reply;
-	} else {
+	if (!await is_replying(page))
 	    count++;
+	reply = await get_text (page, elem);
+	if (reply.length > last_reply.length) { // Any addition?
+	    display_diff (last_reply, reply);
+	    last_reply = reply;
 	}
 	await sleep(200);
     }
+    // Display the last line.
+    let lines = reply.split('\n');
+    console.log(lines[lines.length - 1]);
 }
 
 // argv[2] is the first user-specified argument.
