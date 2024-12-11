@@ -127,22 +127,18 @@ Content-Type:application/json; charset=UTF-8
 }
 ```
 
-2. Send a query from the command line using `chatgpt` script.
+2. Make sure your Chrome/Chromium visits https://chatgpt.com by runnning
+`chatgpt -i`.
 
 ``` sh
-> echo hello | ./chatgpt -s
+> ./chatgpt -i
 ```
 
-You should see that "hello" is sent to ChatGPT in your Chromium/Chrome
-browser.
-
-3. Receive a reply from the command line using `chatgpt` script.
+3. Send a query (e.g., `hello`) to ChatGPT.
 
 ``` sh
-> ./chatgpt -r
+> ./chatgpt -q hello
 Hello! How can I assist you today?
-
-EOF
 ```
 
 This will show the reply from ChatGPT, which must be equivalent to
