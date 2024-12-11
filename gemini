@@ -76,19 +76,20 @@ function display_diff (last_reply, reply) {
 async function send_query (query) {
     const page = await current_page();
     debug("sending...");
+    let prev_elems = await page.$$('message-content');
     await page.$eval('div.textarea',
 		     (el, str) => el.innerText = str, query);
     await page.click('mat-icon[fonticon="send"]');
-    await sleep(2000);
 
     // Wait until reply starts displaying.
-    while (!await is_replying(page)) {
+    let elems;
+    while (true) {
+	elems = await page.$$('message-content');
+	if (prev_elems.length < elems.length)
+	    break;
 	await sleep(200);
     }
     debug("done\n");
-
-    // Locate the DIV tag containing the reply.
-    const elems = await page.$$('div.response-content');
     const elem = elems[elems.length - 1];
 
     let last_reply = '';
