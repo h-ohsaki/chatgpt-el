@@ -74,6 +74,7 @@ function display_diff (last_reply, reply) {
 async function send_query (query) {
     const page = await current_page();
     debug("sending...");
+    let prev_elems = await page.$$('div[data-message-author-role="assistant"]');
     await page.$eval('#prompt-textarea > p',
 		     (el, str) => el.innerText = str, query);
     // Note: Submit button has the data-testid field.
@@ -81,13 +82,14 @@ async function send_query (query) {
     await button.click();
 
     // Wait until reply starts displaying.
-    while (!await is_replying(page)) {
+    let elems;
+    while (true) {
+	elems = await page.$$('div[data-message-author-role="assistant"]');
+	if (prev_elems.length < elems.length)
+	    break;
 	await sleep(200);
     }
     debug("done\n");
-
-    // Locate the DIV tag containing the reply.
-    const elems = await page.$$('div[data-message-author-role="assistant"]');
     const elem = elems[elems.length - 1];
 
     let last_reply = '';
