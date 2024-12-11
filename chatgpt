@@ -5,43 +5,42 @@ const puppeteer = require('puppeteer-core');
 const convert = require('html-to-text');
 const exec = require('child_process').exec
 
-function debug (msg) {
+function debug(msg) {
     process.stdout.write(msg);
 }
-    
-async function sleep (ms) {
+
+async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function connect_to_browser () {
+async function connect_to_browser() {
     for (let n = 0; n < 3; n++) {
-	try {
-	    // FIXME: Port number should be configurable.
-	    const browser = await puppeteer.connect({
-		browserURL: 'http://localhost:9000',
-		defaultViewport: null,
-	    });
-	    return browser;
-	}
-	catch (err) {
-	    exec('google-chrome --remote-debugging-port=9000', function (error, stdout, stderr) {});
-	    await sleep(500);
-	}
+        try {
+            // FIXME: Port number should be configurable.
+            const browser = await puppeteer.connect({
+                browserURL: 'http://localhost:9000',
+                defaultViewport: null,
+            });
+            return browser;
+        } catch (err) {
+            exec('google-chrome --remote-debugging-port=9000', function(error, stdout, stderr) {});
+            await sleep(500);
+        }
     }
 }
 
-async function current_page () {
+async function current_page() {
     debug("# connecting...");
     const browser = await connect_to_browser();
     debug("opening...");
     const pages = await browser.pages();
     for (const page of pages) {
-	// FIXME: Avoid hard-coding.
-	const url = page.url();
-	if (url.indexOf('chatgpt.com') > 0) {
-	    await page.bringToFront();
-	    return page;
-	}
+        // FIXME: Avoid hard-coding.
+        const url = page.url();
+        if (url.indexOf('chatgpt.com') > 0) {
+            await page.bringToFront();
+            return page;
+        }
     }
     // Open ChatGPT if not already visiting.
     const page = pages[0];
@@ -50,7 +49,7 @@ async function current_page () {
     return page;
 }
 
-async function get_text (page, elem) {
+async function get_text(page, elem) {
     const html = await page.evaluate(el => el.innerHTML, elem);
     let text = convert.convert(html, {
         preserveNewlines: true,
@@ -60,23 +59,23 @@ async function get_text (page, elem) {
     return text;
 }
 
-async function is_replying (page) {
+async function is_replying(page) {
     return await page.$('button[data-testid="stop-button"]');
 }
 
-function display_diff (last_reply, reply) {
+function display_diff(last_reply, reply) {
     const last_lines = last_reply.split('\n');
     const lines = reply.split('\n');
     for (let n = last_lines.length - 1; n < lines.length - 1; n++)
-	console.log(lines[n]);
+        console.log(lines[n]);
 }
 
-async function send_query (query) {
+async function send_query(query) {
     const page = await current_page();
     debug("sending...");
     let prev_elems = await page.$$('div[data-message-author-role="assistant"]');
     await page.$eval('#prompt-textarea > p',
-		     (el, str) => el.innerText = str, query);
+        (el, str) => el.innerText = str, query);
     // Note: Submit button has the data-testid field.
     const button = await page.waitForSelector('button[data-testid="send-button"]');
     await button.click();
@@ -84,10 +83,10 @@ async function send_query (query) {
     // Wait until reply starts displaying.
     let elems;
     while (true) {
-	elems = await page.$$('div[data-message-author-role="assistant"]');
-	if (prev_elems.length < elems.length)
-	    break;
-	await sleep(200);
+        elems = await page.$$('div[data-message-author-role="assistant"]');
+        if (prev_elems.length < elems.length)
+            break;
+        await sleep(200);
     }
     debug("done\n");
     const elem = elems[elems.length - 1];
@@ -96,14 +95,14 @@ async function send_query (query) {
     let retry_count = 0;
     // Loop one second after the stop button disapper.
     while (retry_count < 10) {
-	if (!await is_replying(page))
-	    retry_count++;
-	reply = await get_text (page, elem);
-	if (reply.length > last_reply.length) { // Any addition?
-	    display_diff (last_reply, reply);
-	    last_reply = reply;
-	}
-	await sleep(100);
+        if (!await is_replying(page))
+            retry_count++;
+        reply = await get_text(page, elem);
+        if (reply.length > last_reply.length) { // Any addition?
+            display_diff(last_reply, reply);
+            last_reply = reply;
+        }
+        await sleep(100);
     }
     // Display the last line.
     const lines = reply.split('\n');
@@ -115,13 +114,13 @@ const mode = process.argv[2];
 
 if (mode == '-i') {
     (async () => {
-	const page = await current_page();
-	process.exit(0);
+        const page = await current_page();
+        process.exit(0);
     })();
 } else if (mode == '-q') {
     (async () => {
-	const query = process.argv[3]
-	await send_query(query);
-	process.exit(0);
+        const query = process.argv[3]
+        await send_query(query);
+        process.exit(0);
     })();
 }
