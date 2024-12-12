@@ -11,14 +11,14 @@ const TIMEOUT = 2000; // ms
 
 let ENGINE = 'ChatGPT';
 let PAGE_URL = 'https://chatgpt.com/';
-let FORM_SELECTOR = '#prompt-textarea > p';
+let FORM_SELECTOR = 'p.placeholder';
 let BUTTON_SELECTOR = 'button[data-testid="send-button"]';
 let REPLY_SELECTOR = 'div[data-message-author-role="assistant"]';
 let REPLY_PER_QUERY = 1;
 
 function debug(msg) {
     if (DEBUG) {
-	process.stdout.write(msg);
+        process.stdout.write(msg);
     }
 }
 
@@ -35,7 +35,7 @@ async function connect_to_browser() {
                 browserURL: 'http://localhost:9000',
                 defaultViewport: null,
             });
-	    debug("done\n");
+            debug("done\n");
             return browser;
         } catch (err) {
             exec('google-chrome --remote-debugging-port=9000',
@@ -54,7 +54,7 @@ async function open_page(browser) {
         const url = page.url();
         if (url.indexOf(PAGE_URL) >= 0) {
             await page.bringToFront();
-	    debug("done\n");
+            debug("done\n");
             return page;
         }
     }
@@ -99,12 +99,10 @@ async function send_query(query) {
 
     // Wait until reply starts displaying.
     debug("## waiting for display");
-    let elem;
     while (true) {
         const elems = await page.$$(REPLY_SELECTOR);
         debug('.');
         if (elems.length - prev_elems.length >= REPLY_PER_QUERY) {
-            elem = elems[elems.length - 1];
             break;
         }
         await sleep(200);
@@ -112,24 +110,29 @@ async function send_query(query) {
     debug('done\n');
 
     debug("## waiting for the initial reply.");
+    let elem;
     let last_reply;
     let nretires = 0;
     while (true) {
+        // NOTE: This code seems redundant but required for ChatGPT.
+        const elems = await page.$$(REPLY_SELECTOR);
+        elem = elems[elems.length - 1];
         const reply = await get_text(page, elem);
-	if (reply.length > 0) {
-	    last_reply = reply;
-	    debug('done\n');
-	    break;
-	}
+        if (reply.length > 0) {
+            last_reply = reply;
+            debug('done\n');
+            break;
+        }
         await sleep(DELAY);
-	nretires++;
-	debug('.');
-	if (nretires > 10000 / DELAY) {
-	    console.log('No reply received.  Aborting...');
-	    return;
-	}
-    }	
+        nretires++;
+        debug('.');
+        if (nretires > 10000 / DELAY) {
+            console.log('No reply received.  Aborting...');
+            return;
+        }
+    }
 
+    // Fetch the remaining reply.
     let reply;
     let nretries = 0;
     while (true) {
@@ -139,9 +142,9 @@ async function send_query(query) {
             last_reply = reply;
             nretries = 0;
         } else {
-	    nretries++;
-	    if (nretries > TIMEOUT / DELAY)
-		break;
+            nretries++;
+            if (nretries > TIMEOUT / DELAY)
+                break;
         }
         await sleep(DELAY);
     }
@@ -172,35 +175,33 @@ function main() {
     // argv[2] is the first user-specified argument.
     let n = 2;
     while (n < process.argv.length) {
-	const arg = process.argv[n];
-	if (arg == '-e') {
-	    let engine = process.argv[n + 1];
-	    engine = engine.toLowerCase();
-	    if (engine == 'gemini')
-		config_gemini();
-	    if (engine == 'claude')
-		config_claude();
-	    n += 2;
-	}
-	else if (arg == '-i') {
-	    (async () => {
-		const browser = await connect_to_browser();
-		const page = await open_page(browser);
-		process.exit(0);
-	    })();
-	    n++;
-	}
-	else if (arg == '-q') {
-	    (async () => {
-		const query = process.argv[n + 1];
-		await send_query(query);
-		process.exit(0);
-	    })();
-	    n += 2;
-	} else {
-	    console.log(`Invalid command-line argument '${arg}'.`);
-	    process.exit(0);
-	}
+        const arg = process.argv[n];
+        if (arg == '-e') {
+            let engine = process.argv[n + 1];
+            engine = engine.toLowerCase();
+            if (engine == 'gemini')
+                config_gemini();
+            if (engine == 'claude')
+                config_claude();
+            n += 2;
+        } else if (arg == '-i') {
+            (async () => {
+                const browser = await connect_to_browser();
+                const page = await open_page(browser);
+                process.exit(0);
+            })();
+            n++;
+        } else if (arg == '-q') {
+            (async () => {
+                const query = process.argv[n + 1];
+                await send_query(query);
+                process.exit(0);
+            })();
+            n += 2;
+        } else {
+            console.log(`Invalid command-line argument '${arg}'.`);
+            process.exit(0);
+        }
     }
 }
 
