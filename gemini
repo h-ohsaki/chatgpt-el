@@ -78,13 +78,14 @@ async function send_query(query) {
     let prev_elems = await page.$$('message-content');
     await page.$eval('div.textarea',
         (el, str) => el.innerText = str, query);
-    await page.click('mat-icon[fonticon="send"]');
+    const button = await page.waitForSelector('mat-icon[fonticon="send"]');
+    await button.click();
 
     // Wait until reply starts displaying.
     let elems;
     while (true) {
         elems = await page.$$('message-content');
-        if (prev_elems.length < elems.length)
+        if (elems.length - prev_elems.length >= 2)
             break;
         await sleep(200);
     }
