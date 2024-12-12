@@ -98,7 +98,7 @@ async function send_query(query) {
     debug("done\n");
 
     // Wait until reply starts displaying.
-    debug("## waiting reply");
+    debug("## waiting for display");
     let elem;
     while (true) {
         const elems = await page.$$(REPLY_SELECTOR);
@@ -111,27 +111,40 @@ async function send_query(query) {
     }
     debug('done\n');
 
-    let last_reply = '';
-    let retry_count = 0;
-    // Loop terminates after TIMEOUT silence.
-    debug('## extracting reply')
-    while (retry_count < TIMEOUT / DELAY) {
+    debug("## waiting for the initial reply.");
+    let last_reply;
+    let nretires = 0;
+    while (true) {
+        const reply = await get_text(page, elem);
+	if (reply.length > 0) {
+	    last_reply = reply;
+	    debug('done\n');
+	    break;
+	}
+        await sleep(DELAY);
+	nretires++;
+	debug('.');
+	if (nretires > 10000 / DELAY) {
+	    console.log('No reply received.  Aborting...');
+	    return;
+	}
+    }	
+
+    let reply;
+    let nretries = 0;
+    while (true) {
         reply = await get_text(page, elem);
         if (reply.length > last_reply.length) { // Any addition?
             display_diff(last_reply, reply);
-	    if (!last_reply)
-		debug('\n');
             last_reply = reply;
-            retry_count = 0;
+            nretries = 0;
         } else {
-	    if (last_reply)
-		retry_count++;
-	    else
-		debug('.');
+	    nretries++;
+	    if (nretries > TIMEOUT / DELAY)
+		break;
         }
         await sleep(DELAY);
     }
-    debug('## timeout\n')
     // Display the last line.
     const lines = reply.split('\n');
     console.log(lines[lines.length - 1]);
@@ -171,7 +184,8 @@ function main() {
 	}
 	else if (arg == '-i') {
 	    (async () => {
-		const page = await current_page();
+		const browser = await connect_to_browser();
+		const page = await open_page(browser);
 		process.exit(0);
 	    })();
 	    n++;
