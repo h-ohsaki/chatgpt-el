@@ -20,6 +20,7 @@
 
 ;; (setq chatgpt-prog "~/src/chatgpt-el/chatgpt")
 ;; (setq chatgpt-prog "~/src/chatgpt-el/gemini")
+;; (setq chatgpt-prog "~/src/chatgpt-el/claude")
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt")
 
 (defvar chatgpt-prefix-alist
