@@ -58,8 +58,7 @@ program according to your environment.
 (global-set-key "\C-cq" 'chatgpt-query)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt")
-;; (setq chatgpt-prog "../path/to/chatgpt-el/gemini")
-;; (setq chatgpt-prog "../path/to/chatgpt-el/claude")
+(setq chatgpt-engine "chatgpt")
 EOF
 ```
 
@@ -74,7 +73,7 @@ such as Puppeteer and html-to-text must be accessible from `chatgpt` program.
 > chromium --remote-debugging-port=9000
 ```
 
-2. Visit ChatGPT/Gemini/Calude in Chromium/Chrome, and login with your OpenAI
+2. Visit ChatGPT/Gemini/Calude in Chromium/Chrome, and login with your
    account.
 
 3. On Emacs, move the point (i.e., the cursor in Emacs) at the end of the
@@ -125,12 +124,13 @@ Content-Type:application/json; charset=UTF-8
 }
 ```
 
-2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Calude Web page by
-runnning `chatgpt -i`.  In the following examples, use `gemini` or `claude` if
-you want to use Gemini or Calude.
+2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Claude page by
+runnning `chatgpt -i`.
 
 ``` sh
 > ./chatgpt -i
+> ./chatgpt -e gemini -i
+> ./chatgpt -e claude -i
 ```
 
 3. Send a query (e.g., `hello`) to ChatGPT/Gemini/Calude.
@@ -138,6 +138,10 @@ you want to use Gemini or Calude.
 ``` sh
 > ./chatgpt -q hello
 Hello! How can I assist you today?
+> ./chatgpt -e gemini -q hello
+Hello to you too! How can I help you today?
+> ./chatgpt -e claude -q hello
+Hi! How can I help you today?
 ```
 
 This will show the reply from ChatGPT/Gemini/Calude, which must be equivalent
