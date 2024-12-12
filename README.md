@@ -1,42 +1,40 @@
 # NAME
 
-chatgpt-el - access ChatGTP from Emacs without OpenAI API
+chatgpt-el - access ChatGTP/Gemini/Calude from Emacs without APIs
 
 ![video](screenshot/video.gif)
 
 # DESCRIPTION
 
-**chatgpt-el** is an Emacs Lisp program designed to interactively
-access ChatGPT (https://chat.openai.com/) from within Emacs.  While
-ChatGPT can be accessed via OpenAI API using a programming language
-like Python and its openai module, such access has several drawbacks.
+**chatgpt-el** is an Emacs Lisp program designed to interactively access
+ChatGPT/Gemini/Calude from within Emacs.  While those AIs can be accessed via
+API interfaces using a programming language like Python and several modules,
+such access has several drawbacks.
 
-1. Batch processing through OpenAI API is slow; accessing OpenAI API
-   is slow, and responses can often take an unnecessarily long
-   time. Such slow response times can make accessing ChatGPT
-   frustrating.
+1. Batch processing through APIs is slow; accessing APIs is slow, and
+   responses can often take an unnecessarily long time. Such slow response
+   times can make accessing AIs frustrating.
 
-2. Accessing ChatGPT via OpenAI API requires a non-free OpenAI account
-   with credit card registration. Frequent use of ChatGPT can lead to
-   high costs and require monitoring of OpenAI billing records.
+2. Accessing AIs via APIs sometimes requires a non-free AI account with credit
+   card registration. Frequent use of AIs can lead to high costs and require
+   monitoring of AI billing records.
 
-**chatgpt-el** solves the above issues by enabling access to ChatGPT
-within Emacs without the use of an OpenAI API key.  The program is
-implemented using Chromium/Chrome browser's CDP (Chrome DevTools
-Protocol) (https://chromedevtools.github.io/devtools-protocol/), and
-therefore requires a CDP-enabled Chromium/Chrome browser to be
-running.  **chatgpt-el** operates by remotely controlling your
-instance of Chromium/Chrome using the Node.js script called `chatgpt`,
-which is built on the Puppeteer library
-(https://pptr.dev/). Therefore, your Chromium/Chrome browser must
-accept a CDP connection from the `chatgpt` script.
+**chatgpt-el** solves the above issues by enabling access to
+ChatGPT/Gemini/Calude within Emacs without the use of an API key.  The program
+is implemented using Chromium/Chrome browser's CDP (Chrome DevTools Protocol)
+(https://chromedevtools.github.io/devtools-protocol/), and therefore requires
+a CDP-enabled Chromium/Chrome browser to be running.  **chatgpt-el** operates
+by remotely controlling your instance of Chromium/Chrome using the Node.js
+script called `chatgpt`, which is built on the Puppeteer library
+(https://pptr.dev/). Therefore, your Chromium/Chrome browser must accept a CDP
+connection from the `chatgpt` script.
 
 ![overview](overview.png)
 
-Note that the implementation of the `chatgpt` script depends on the
-internal structure of the HTML file returned by the ChatGPT server. If
-`chatgpt` does not work in your environment, you may need to modify
-the program according to your environment.
+Note that the implementation of the `chatgpt` script depends on the internal
+structure of the HTML file returned by the ChatGPT/Gemini/Calude server. If
+`chatgpt` does not work in your environment, you may need to modify the
+program according to your environment.
 
 # PREREQUISITES
 
@@ -60,12 +58,13 @@ the program according to your environment.
 (global-set-key "\C-cq" 'chatgpt-query)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt")
+;; (setq chatgpt-prog "../path/to/chatgpt-el/gemini")
+;; (setq chatgpt-prog "../path/to/chatgpt-el/claude")
 EOF
 ```
 
-You can place `chatgpt` script anywhere in your system, but Node.js
-modules such as Puppeteer and html-to-text must be accessible from
-`chatgpt` program.
+You can place `chatgpt` script anywhere in your system, but Node.js modules
+such as Puppeteer and html-to-text must be accessible from `chatgpt` program.
 
 # USAGE
 
@@ -75,35 +74,34 @@ modules such as Puppeteer and html-to-text must be accessible from
 > chromium --remote-debugging-port=9000
 ```
 
-2. Visit ChatGPT (https://chat.openai.com/) in Chromium/Chrome, and
-   login with your OpenAI account.
+2. Visit ChatGPT/Gemini/Calude in Chromium/Chrome, and login with your OpenAI
+   account.
 
-3. On Emacs, move the point (i.e., the cursor in Emacs) at the end of
-   the query text.  Alternatively, you can select the region
-   containing the query text.  Then, type `C-c q` or execute `M-x
-   chatgpt-query`.  With a prefix argument (e.g., `C-u C-c q`), you
-   will be prompted what query prefix is prepended to the query text.
+3. On Emacs, move the point (i.e., the cursor in Emacs) at the end of the
+   query text.  Alternatively, you can select the region containing the query
+   text.  Then, type `C-c q` or execute `M-x chatgpt-query`.  With a prefix
+   argument (e.g., `C-u C-c q`), you will be prompted what query prefix is
+   prepended to the query text.
 
-4. The query is automatically submitted to ChatGPT in your
-   Chromium/Chrome.  The reply from ChatGPT will be displayed in
-   another buffer in Emacs.
+4. The query is automatically submitted to ChatGPT/Gemini/Calude in your
+   Chromium/Chrome.  The reply from the ChatGPT/Gemini/Calude will be
+   displayed in another buffer in Emacs.
 
 5. Once the reply is displayed, type `C-c Q` or execute M-x
-   chatgpt-insert-reply from Emacs.  The reply from ChatGPT is
+   chatgpt-insert-reply from Emacs.  The reply from ChatGPT/Gemini/Calude is
    inserted at the current point.
 
-6. If there are further responses from ChatGTP, type `C-u C-u C-c q`
-   to display the continuation of ChatGTP's response in the buffer of
+6. If there are further responses from ChatGTP/Gemini/Calude, type `C-u C-u
+   C-c q` to display the continuation of ChatGTP's response in the buffer of
    Emacs.
    
-7. When requesting translation or proofreading of a text for ChatGPT,
-   it is possible to replace the query text with the response from
-   ChatGTP. To do this, type `C-u C-u C-c Q`.
+7. When requesting translation or proofreading of a text for
+   ChatGPT/Gemini/Calude, it is possible to replace the query text with the
+   response from ChatGTP/Gemini/Calude. To do this, type `C-u C-u C-c Q`.
 
 # TROUBLE SHOOTING
 
-1. Make sure your Chromium/Chrome accepts a CDP connection on
-   localhost:9000.
+1. Make sure your Chromium/Chrome accepts a CDP connection on localhost:9000.
    
 ``` sh
 > telnet localhost 9000
@@ -127,22 +125,23 @@ Content-Type:application/json; charset=UTF-8
 }
 ```
 
-2. Make sure your Chrome/Chromium visits https://chatgpt.com by runnning
-`chatgpt -i`.
+2. Make sure your Chrome/Chromium visits ChatGTP/Gemini/Calude Web page by
+runnning `chatgpt -i`.  In the following examples, use `gemini` or `claude` if
+you want to use Gemini or Calude.
 
 ``` sh
 > ./chatgpt -i
 ```
 
-3. Send a query (e.g., `hello`) to ChatGPT.
+3. Send a query (e.g., `hello`) to ChatGPT/Gemini/Calude.
 
 ``` sh
 > ./chatgpt -q hello
 Hello! How can I assist you today?
 ```
 
-This will show the reply from ChatGPT, which must be equivalent to
-that shown in your Chromium/Chrome.
+This will show the reply from ChatGPT/Gemini/Calude, which must be equivalent
+to that shown in your Chromium/Chrome.
 
 # FOR QUTEBROWSER USERS
 
