@@ -84,7 +84,7 @@ async function send_query(query) {
     let elems;
     while (true) {
         elems = await page.$$('div[data-message-author-role="assistant"]');
-        if (prev_elems.length < elems.length)
+        if (elems.length - prev_elems.length >= 2)
             break;
         await sleep(200);
     }
