@@ -62,9 +62,38 @@ async function get_text(page, elem) {
 }
 
 async function is_replying(page) {
-    const elem = await page.$('html');
+    let flag = false;
+    try {
+	await page.waitForSelector('button[aria-label="Stop Response"]', { 
+	    visible: true,
+	    timeout: 1
+	});
+	const button = await page.$('button[aria-label="Stop Response"]');
+	const isClickable = await button.evaluate(el => !el.disabled);
+	flag = true;
+    } catch (error) {
+    }
+console.log(flag)
+    return flag;
+}
+
+async function __is_replying(page) {
+    const elem = await page.$('body');
     const html = await page.evaluate(el => el.innerHTML, elem);
+console.log(html.includes('Claude response'))
     return html.includes('Stop Claude response');
+}
+
+async function _is_replying(page) {
+    let busy = false;
+    try {
+	const elem = await page.waitForSelector('button[aria-label="Stop Response"]',
+						{ visible: true, timeout: 0 });
+	busy = true;
+    } catch (err) {
+    }
+    console.log('is_replying: ', busy)
+    return busy;
 }
 
 function display_diff(last_reply, reply) {
@@ -97,14 +126,16 @@ async function send_query(query) {
     let last_reply = '';
     let retry_count = 0;
     // Loop one second after the stop button disapper.
-    while (retry_count < 50) {
-        if (!await is_replying(page))
-            retry_count++;
+    while (retry_count < 10*100) {
         reply = await get_text(page, elem);
         if (reply.length > last_reply.length) { // Any addition?
             display_diff(last_reply, reply);
             last_reply = reply;
-        }
+	    retry_count = 0;
+	} else {
+	    if (!await is_replying(page))
+		retry_count++;
+	}
         await sleep(100);
     }
     // Display the last line.
