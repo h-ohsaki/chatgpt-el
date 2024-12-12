@@ -5,8 +5,17 @@ const puppeteer = require('puppeteer-core');
 const convert = require('html-to-text');
 const exec = require('child_process').exec
 
+const DELAY = 100; // ms
+const TIMEOUT = 3000; // ms
+
+let PAGE_URL = 'https://chatgpt.com/';
+let FORM_SELECTOR = '#prompt-textarea > p';
+let BUTTON_SELECTOR = 'button[data-testid="send-button"]';
+let REPLY_SELECTOR = 'div[data-message-author-role="assistant"]';
+let REPLY_PER_QUERY = 1;
+
 function debug(msg) {
-    process.stdout.write(msg);
+    process.stdout.write(`## ${msg}\n`);
 }
 
 async function sleep(ms) {
@@ -23,29 +32,31 @@ async function connect_to_browser() {
             });
             return browser;
         } catch (err) {
-            exec('google-chrome --remote-debugging-port=9000', function(error, stdout, stderr) {});
-            await sleep(500);
+            exec('google-chrome --remote-debugging-port=9000',
+                function(error, stdout, stderr) {});
+            await sleep(DELAY * 5);
         }
     }
+    console.log('Failed to connect the browser');
 }
 
 async function current_page() {
-    debug("# connecting...");
     const browser = await connect_to_browser();
-    debug("opening...");
+
+    debug("opening page...");
     const pages = await browser.pages();
     for (const page of pages) {
         // FIXME: Avoid hard-coding.
         const url = page.url();
-        if (url.indexOf('claude.ai') > 0) {
+        if (url.indexOf(PAGE_URL) >= 0) {
             await page.bringToFront();
             return page;
         }
     }
-    // Open ChatGPT if not already visiting.
+    // Newly open the page if not already visiting.
     const page = pages[0];
     await page.bringToFront();
-    await page.goto('https://claude.ai/');
+    await page.goto(PAGE_URL);
     return page;
 }
 
@@ -62,38 +73,9 @@ async function get_text(page, elem) {
 }
 
 async function is_replying(page) {
-    let flag = false;
-    try {
-	await page.waitForSelector('button[aria-label="Stop Response"]', { 
-	    visible: true,
-	    timeout: 1
-	});
-	const button = await page.$('button[aria-label="Stop Response"]');
-	const isClickable = await button.evaluate(el => !el.disabled);
-	flag = true;
-    } catch (error) {
-    }
-console.log(flag)
-    return flag;
-}
-
-async function __is_replying(page) {
-    const elem = await page.$('body');
-    const html = await page.evaluate(el => el.innerHTML, elem);
-console.log(html.includes('Claude response'))
-    return html.includes('Stop Claude response');
-}
-
-async function _is_replying(page) {
-    let busy = false;
-    try {
-	const elem = await page.waitForSelector('button[aria-label="Stop Response"]',
-						{ visible: true, timeout: 0 });
-	busy = true;
-    } catch (err) {
-    }
-    console.log('is_replying: ', busy)
-    return busy;
+    // FIXME: Identify how to determine responding state.
+    // return await page.$('button[data-testid="stop-button"]');
+    return false;
 }
 
 function display_diff(last_reply, reply) {
@@ -104,57 +86,98 @@ function display_diff(last_reply, reply) {
 }
 
 async function send_query(query) {
+    debug("connecting to browser...");
     const page = await current_page();
-    debug("sending...");
-    let prev_elems = await page.$$('div[data-test-render-count]');
-    await page.$eval('p[data-placeholder]',
-        (el, str) => el.innerText = str, query);
-    const button = await page.waitForSelector('button[aria-label="Send Message"]');
+
+    debug("sending query...");
+    await page.$eval(FORM_SELECTOR, (el, str) => el.innerText = str, query);
+    const button = await page.waitForSelector(BUTTON_SELECTOR);
+    // Record all already-displayed reples.
+    let prev_elems = await page.$$(REPLY_SELECTOR);
     await button.click();
 
     // Wait until reply starts displaying.
-    let elems;
+    let elem;
     while (true) {
-        elems = await page.$$('div[data-test-render-count]');
-        if (elems.length - prev_elems.length >= 2)
+        const elems = await page.$$(REPLY_SELECTOR);
+        debug(`waiting reply (prev=${prev_elems.length}, now=${elems.length})...`)
+        if (elems.length - prev_elems.length >= REPLY_PER_QUERY) {
+            elem = elems[elems.length - 1];
             break;
+        }
         await sleep(200);
     }
-    debug("done\n");
-    const elem = elems[elems.length - 1];
 
     let last_reply = '';
     let retry_count = 0;
-    // Loop one second after the stop button disapper.
-    while (retry_count < 10*100) {
+    // Loop terminates after threee seconds silence.
+    debug('extracting reply...')
+    while (retry_count < TIMEOUT / DELAY) {
         reply = await get_text(page, elem);
         if (reply.length > last_reply.length) { // Any addition?
             display_diff(last_reply, reply);
             last_reply = reply;
-	    retry_count = 0;
-	} else {
-	    if (!await is_replying(page))
-		retry_count++;
-	}
-        await sleep(100);
+            retry_count = 0;
+        } else {
+            retry_count++;
+        }
+        await sleep(DELAY);
     }
+    debug('timeout')
     // Display the last line.
     const lines = reply.split('\n');
     console.log(lines[lines.length - 1]);
 }
 
-// argv[2] is the first user-specified argument.
-const mode = process.argv[2];
-
-if (mode == '-i') {
-    (async () => {
-        const page = await current_page();
-        process.exit(0);
-    })();
-} else if (mode == '-q') {
-    (async () => {
-        const query = process.argv[3]
-        await send_query(query);
-        process.exit(0);
-    })();
+function config_gemini() {
+    PAGE_URL = 'https://gemini.google.com/';
+    FORM_SELECTOR = 'div.textarea';
+    BUTTON_SELECTOR = 'mat-icon[fonticon="send"]';
+    REPLY_SELECTOR = 'message-content';
+    REPLY_PER_QUERY = 1;
 }
+
+function config_claude() {
+    PAGE_URL = 'https://claude.ai/';
+    FORM_SELECTOR = 'p[data-placeholder]';
+    BUTTON_SELECTOR = 'button[aria-label="Send Message"]';
+    REPLY_SELECTOR = 'div[data-test-render-count]';
+    REPLY_PER_QUERY = 2;
+}
+
+function main() {
+    // argv[2] is the first user-specified argument.
+    let n = 2;
+    while (n < process.argv.length) {
+	const arg = process.argv[n];
+	debug(`arg = ${arg}`);
+	if (arg == '-e') {
+	    const engine = process.argv[n + 1];
+	    if (engine == 'gemini')
+		config_gemini();
+	    if (engine == 'claude')
+		config_claude();
+	    n += 2;
+	}
+	else if (arg == '-i') {
+	    (async () => {
+		const page = await current_page();
+		process.exit(0);
+	    })();
+	    n++;
+	}
+	else if (arg == '-q') {
+	    (async () => {
+		const query = process.argv[n + 1];
+		await send_query(query);
+		process.exit(0);
+	    })();
+	    n += 2;
+	} else {
+	    console.log(`Invalid argument '${arg}'.`);
+	    process.exit(0);
+	}
+    }
+}
+
+main();
