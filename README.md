@@ -1,6 +1,6 @@
 # NAME
 
-chatgpt-el - access ChatGTP/Gemini/Calude from Emacs without APIs
+chatgpt-el - access ChatGPT/Gemini/Calude from Emacs without APIs
 
 ![video](screenshot/video.gif)
 
@@ -91,13 +91,13 @@ such as Puppeteer and html-to-text must be accessible from `chatgpt` program.
    chatgpt-insert-reply from Emacs.  The reply from ChatGPT/Gemini/Calude is
    inserted at the current point.
 
-6. If there are further responses from ChatGTP/Gemini/Calude, type `C-u C-u
-   C-c q` to display the continuation of ChatGTP's response in the buffer of
+6. If there are further responses from ChatGPT/Gemini/Calude, type `C-u C-u
+   C-c q` to display the continuation of ChatGPT's response in the buffer of
    Emacs.
    
 7. When requesting translation or proofreading of a text for
    ChatGPT/Gemini/Calude, it is possible to replace the query text with the
-   response from ChatGTP/Gemini/Calude. To do this, type `C-u C-u C-c Q`.
+   response from ChatGPT/Gemini/Calude. To do this, type `C-u C-u C-c Q`.
 
 # TROUBLE SHOOTING
 
@@ -125,7 +125,7 @@ Content-Type:application/json; charset=UTF-8
 }
 ```
 
-2. Make sure your Chrome/Chromium visits ChatGTP/Gemini/Calude Web page by
+2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Calude Web page by
 runnning `chatgpt -i`.  In the following examples, use `gemini` or `claude` if
 you want to use Gemini or Calude.
 
