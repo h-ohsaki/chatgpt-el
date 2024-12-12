@@ -18,10 +18,8 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-;; (setq chatgpt-prog "~/src/chatgpt-el/chatgpt")
-;; (setq chatgpt-prog "~/src/chatgpt-el/gemini")
-;; (setq chatgpt-prog "~/src/chatgpt-el/claude")
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt")
+(defvar chatgpt-engine "chatgpt")
 
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -72,7 +70,9 @@
 	    '(chatgpt-font-lock-keywords 'keywords-only nil))
       (font-lock-mode 1)
       ;;
-      (setq chatgpt--process (start-process "foo" buf chatgpt-prog "-q" query))
+      (setq chatgpt--process (start-process "ChatGPT" buf chatgpt-prog
+					    "-e" chatgpt-engine
+					    "-q" query))
       (set-process-sentinel chatgpt--process
 			    'chatgpt--process-sentinel)
       (set-process-filter chatgpt--process 'chatgpt--process-filter))
@@ -100,7 +100,7 @@
 ;; ----------------------------------------------------------------
 ;; (chatgpt-lookup "Emacs")
 (defun chatgpt-lookup (query)
-  (interactive (list (read-string "ChatGPT lookup: " 
+  (interactive (list (read-string "ChatGPT lookup: "
 				  (thing-at-point 'word))))
   (chatgpt-send-query query))
 
@@ -173,5 +173,12 @@
       (insert "\n\n")
       (chatgpt-insert-reply '(4))
       (write-region (point-min) (point-max) logfile 'append))))
+
+;; (chatgpt-select-engine)
+(defun chatgpt-select-engine ()
+  (interactive)
+  (let* ((engines '("chatgpt" "gemini" "claude"))
+	 (engine (completing-read "ChatGPT engine: " engines nil t)))
+    (setq chatgpt-engine engine)))
 
 (provide 'chatgpt)
