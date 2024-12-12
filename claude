@@ -56,6 +56,8 @@ async function get_text(page, elem) {
         wordwrap: false,
     });
     text = text.replace(/\n\n+/g, '\n\n');
+    // Remove the garbage at the bottom in Claude.
+    text = text.replace('\nCopyRetry', '');
     return text;
 }
 
