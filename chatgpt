@@ -133,7 +133,7 @@ async function send_query(query) {
     }
 
     // Fetch the remaining reply.
-    debug("## displaying\n");
+    debug("## fetching\n");
     let reply;
     let nretries = 0;
     while (true) {
