@@ -98,7 +98,7 @@ async function send_query(query) {
     debug("done\n");
 
     // Wait until reply starts displaying.
-    debug("## waiting for display");
+    debug("## waiting for display...");
     while (true) {
         const elems = await page.$$(REPLY_SELECTOR);
         debug('.');
@@ -109,7 +109,7 @@ async function send_query(query) {
     }
     debug('done\n');
 
-    debug("## waiting for the initial reply.");
+    debug("## waiting for initial reply...");
     let elem;
     let last_reply;
     let nretires = 0;
@@ -133,6 +133,7 @@ async function send_query(query) {
     }
 
     // Fetch the remaining reply.
+    debug("## displaying\n");
     let reply;
     let nretries = 0;
     while (true) {
@@ -149,6 +150,7 @@ async function send_query(query) {
         await sleep(DELAY);
     }
     // Display the last line.
+    debug("## finished\n");
     const lines = reply.split('\n');
     console.log(lines[lines.length - 1]);
 }
