@@ -20,9 +20,9 @@
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt")
 (defvar chatgpt-engine "ChatGPT")
-(defvar chatgpt-engines-alist '((?c . "ChatGPT")
-				(?g . "Gemini")
-				(?l . "Claude")))
+(defvar chatgpt-engines-alist '((?1 . "ChatGPT")
+				(?2 . "Gemini")
+				(?3 . "Claude")))
 
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -127,40 +127,45 @@
 	(concat prefix " ")
       nil)))
 
+(defun chatgpt--read-query (prefix)
+  (let (beg-pos end-pos query)
+    (cond
+     ;; Region is selected.
+     (mark-active
+      (setq beg-pos (region-beginning))
+      (setq end-pos (region-end))
+      (setq query (buffer-substring-no-properties beg-pos end-pos)))
+     ;; A character follows the point.
+     ((looking-at "\\w")
+      (setq query (thing-at-point 'word)))
+     ;; Possibly, at the end line.
+     (t
+      (setq query (string-trim 
+		   (or (thing-at-point 'paragraph) "")))
+      (setq beg-pos (save-excursion
+		      (search-backward query nil t)
+		      (point)))
+      (setq end-pos (point))))
+    ;; Remove the preceeding Q.
+    (setq query (replace-regexp-in-string "^Q\\. *" "" query))
+    (setq query (read-string (format "%s query: " chatgpt-engine)
+			     (concat prefix query)))
+    ;; Record the region used as the query.
+    (setq chatgpt--last-query-beg beg-pos)
+    (setq chatgpt--last-query-end end-pos)
+    query))
+
 ;; (chatgpt-query "Emacs")
 (defun chatgpt-query (arg)
   (interactive "P")
   (let ((prefix "")
-	query beg-pos end-pos)
+	query)
     (cond ((equal arg '(16))
-	   (setq query "続き"))
+	   (chatgpt-select-engine))
 	  (arg
 	   (setq prefix (chatgpt--read-prefix))))
     (unless query
-      (cond
-       ;; Region is selected.
-       (mark-active
-	(setq beg-pos (region-beginning))
-	(setq end-pos (region-end))
-	(setq query (buffer-substring-no-properties beg-pos end-pos)))
-       ;; A character follows the point.
-       ((looking-at "\\w")
-	(setq query (thing-at-point 'word)))
-       ;; Possibly, at the end line.
-       (t
-	(setq query (string-trim 
-		     (or (thing-at-point 'paragraph) "")))
-	(setq beg-pos (save-excursion
-			(search-backward query nil t)
-			(point)))
-	(setq end-pos (point))))
-      ;; Remove the preceeding Q.
-      (setq query (replace-regexp-in-string "^Q\\. *" "" query))
-      (setq query (read-string (format "%s query: " chatgpt-engine)
-			       (concat prefix query))))
-    ;; Record the region used as the query.
-    (setq chatgpt--last-query-beg beg-pos)
-    (setq chatgpt--last-query-end end-pos)
+      (setq query (chatgpt--read-query prefix)))
     (chatgpt-send-query (concat prefix query))))
 
 ;; (chatgpt-insert-reply nil)
@@ -192,7 +197,7 @@
 ;; (chatgpt-select-engine)
 (defun chatgpt-select-engine ()
   (interactive)
-  (let ((key (read-char-choice "ChatGPT engine (c: ChatGPT, g: Gemini, l: Claude): "
+  (let ((key (read-char-choice "Select engine (1: ChatGPT, 2: Gemini, 3: Claude): "
 			       (mapcar #'car chatgpt-engines-alist))))
     (setq chatgpt-engine (cdr (assoc key chatgpt-engines-alist)))))
 
