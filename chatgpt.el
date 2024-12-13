@@ -59,9 +59,20 @@
 (defvar chatgpt--process nil)
 
 (defun chatgpt--buffer-name ()
-  (format "*%s reply" chatgpt-engine))
+  (format "*%s reply*" chatgpt-engine))
 
-;; ----------------------------------------------------------------
+(defun chatgpt-mode ()
+  (interactive)
+  (kill-all-local-variables)
+  (setq major-mode 'chatgpt-mode)
+  (setq mode-name "ChatGPT")
+  ;; Local variables.
+  (make-local-variable 'font-lock-defaults)
+  (setq font-lock-defaults
+	'(chatgpt-font-lock-keywords 'keywords-only nil))
+  (setq word-wrap t)
+  (font-lock-mode 1))
+  
 ;; (chatgpt-send-query "which of Emacs or vi is better?")
 ;; (chatgpt-send-query "what is Emacs's interesting history?")
 (defun chatgpt-send-query (query)
@@ -70,11 +81,8 @@
     ;; Initialize the reply buffer.
     (with-current-buffer buf
       (erase-buffer)
-      (setq word-wrap t)
-      (setq font-lock-defaults
-	    '(chatgpt-font-lock-keywords 'keywords-only nil))
-      (font-lock-mode 1)
-      ;;
+      (chatgpt-mode)
+      (setq mode-name chatgpt-engine)
       (setq chatgpt--process (start-process chatgpt-engine buf chatgpt-prog
 					    "-e" chatgpt-engine
 					    "-q" query))
@@ -94,6 +102,8 @@
 
 (defun chatgpt--process-filter (proc output)
   (with-current-buffer (process-buffer proc)
+    (if (string-match "## \\([A-Za-z ]+\\)" output)
+	(setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output))))
     (save-excursion
       (goto-char (point-max))
       (insert output))))
@@ -102,7 +112,6 @@
   (with-current-buffer (chatgpt--buffer-name)
     (buffer-string)))
 
-;; ----------------------------------------------------------------
 ;; (chatgpt-lookup "Emacs")
 (defun chatgpt-lookup (query)
   (interactive (list (read-string (format "%s lookup: " chatgpt-engine)
