@@ -111,7 +111,7 @@ async function send_query(query) {
 
     debug("## waiting for initial reply...");
     let elem;
-    let last_reply;
+    let last_reply = '';
     let nretires = 0;
     while (true) {
         // NOTE: This code seems redundant but required for ChatGPT.
@@ -119,8 +119,9 @@ async function send_query(query) {
         elem = elems[elems.length - 1];
         const reply = await get_text(page, elem);
         if (reply.length > 0) {
-            last_reply = reply;
             debug('done\n');
+            display_diff(last_reply, reply);
+            last_reply = reply;
             break;
         }
         await sleep(DELAY);
