@@ -32,6 +32,7 @@ async function connect_to_browser() {
         // FIXME: Port number should be configurable.
         browser = await puppeteer.connect({
             browserURL: 'http://localhost:9000',
+            // Use the view area as much as possible.
             defaultViewport: null,
         });
     } catch (err) {
@@ -46,7 +47,7 @@ async function open_page(browser) {
     debug(`## opening ${ENGINE}...`);
     const pages = await browser.pages();
     for (const page of pages) {
-        // FIXME: Avoid hard-coding.
+        // Try to find the page visiting PAGE_URL.
         const url = page.url();
         if (url.indexOf(PAGE_URL) >= 0) {
             await page.bringToFront();
@@ -63,28 +64,28 @@ async function open_page(browser) {
 }
 
 async function get_text(page, elem) {
+    // Covert the HTML at ELEM to text format.
     const html = await page.evaluate(el => el.innerHTML, elem);
     let text = convert.convert(html, {
         preserveNewlines: true,
         wordwrap: false,
     });
     text = text.replace(/\n\n+/g, '\n\n');
-    // Remove the garbage at the bottom in Claude.
+    // Remove the garbages at the bottom in Claude.
     text = text.replace('\nCopyRetry', '');
     return text;
 }
 
+// FIXME: Code fragments in Markdown format will be truncated.
 function display_diff(last_reply, reply) {
     const last_lines = last_reply.split('\n');
     const lines = reply.split('\n');
+    // The last line is not displayed since it may change later.
     for (let n = last_lines.length - 1; n < lines.length - 1; n++)
         console.log(lines[n]);
 }
 
-async function send_query(query) {
-    const browser = await connect_to_browser();
-    const page = await open_page(browser);
-
+async function send_query(page, query) {
     debug("## sending query...");
     await page.$eval(FORM_SELECTOR, (el, str) => el.innerText = str, query);
     const button = await page.waitForSelector(BUTTON_SELECTOR);
@@ -98,6 +99,7 @@ async function send_query(query) {
     while (true) {
         const elems = await page.$$(REPLY_SELECTOR);
         debug('.');
+        // ChatGPT and Gemini generate a single DIV, whereas Claude does two.
         if (elems.length - prev_elems.length >= REPLY_PER_QUERY) {
             break;
         }
@@ -123,6 +125,7 @@ async function send_query(query) {
         await sleep(DELAY);
         nretires++;
         debug('.');
+        // Wait 10 seconds for the initial reply at most.
         if (nretires > 10000 / DELAY) {
             console.log('No reply received.  Aborting...');
             return;
@@ -141,6 +144,7 @@ async function send_query(query) {
             nretries = 0;
         } else {
             nretries++;
+            // Wait TIMEOUT for consequtive reples at most.
             if (nretries > TIMEOUT / DELAY)
                 break;
         }
@@ -149,6 +153,7 @@ async function send_query(query) {
     // Display the last line.
     debug("## finished\n");
     const lines = reply.split('\n');
+    // FIXME: This code may fail for a single-reply.
     console.log(lines[lines.length - 1]);
 }
 
@@ -173,11 +178,13 @@ function config_claude() {
 function main() {
     // argv[2] is the first user-specified argument.
     let n = 2;
+    // Parse options and arguments.
     while (n < process.argv.length) {
         const arg = process.argv[n];
         if (arg == '-e') {
             let engine = process.argv[n + 1];
             engine = engine.toLowerCase();
+            // Use ChatGPT by default.
             if (engine == 'gemini')
                 config_gemini();
             if (engine == 'claude')
@@ -193,7 +200,9 @@ function main() {
         } else if (arg == '-q') {
             (async () => {
                 const query = process.argv[n + 1];
-                await send_query(query);
+                const browser = await connect_to_browser();
+                const page = await open_page(browser);
+                await send_query(page, query);
                 process.exit(0);
             })();
             n += 2;
