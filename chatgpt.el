@@ -109,8 +109,14 @@
       (insert output))))
 
 (defun chatgpt-extract-reply ()
-  (with-current-buffer (chatgpt--buffer-name)
-    (buffer-string)))
+  (let ((reply (with-current-buffer (chatgpt--buffer-name)
+		 (buffer-string))))
+    (with-temp-buffer
+      (insert reply)
+      (goto-char (point-min))
+      (while (re-search-forward "## .*\n" nil t)
+	(replace-match ""))
+      (buffer-string))))
 
 ;; (chatgpt-lookup "Emacs")
 (defun chatgpt-lookup (query)
@@ -187,12 +193,13 @@
 ;; (chatgpt-save-reply)
 (defun chatgpt-save-reply ()
   (interactive)
-  (let ((save-silently t)
-	(logfile "~/.chatgpt-log.org"))
+  (let* ((save-silently t)
+	 (base (format-time-string "%Y%m%d-%H%M%S"))
+	 (file (format "~/var/log/chatgpt/%s-%s" chatgpt-engine base)))
     (with-temp-buffer
-      (insert "\n\n")
+      (insert "\n")
       (chatgpt-insert-reply '(4))
-      (write-region (point-min) (point-max) logfile 'append))))
+      (write-region (point-min) (point-max) file 'append))))
 
 ;; (chatgpt-select-engine)
 (defun chatgpt-select-engine ()
