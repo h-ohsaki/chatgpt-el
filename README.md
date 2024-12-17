@@ -58,8 +58,8 @@ program according to your environment.
 (global-set-key "\C-cq" 'chatgpt-query)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt")
-(setq chatgpt-engine "chatgpt")
 EOF
+> mkdir -p ~/var/log/chatgpt
 ```
 
 You can place `chatgpt` script anywhere in your system, but Node.js modules
