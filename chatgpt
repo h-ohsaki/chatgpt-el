@@ -3,7 +3,6 @@
 // https://pptr.dev/
 const puppeteer = require('puppeteer-core');
 const convert = require('html-to-text');
-const exec = require('child_process').exec
 
 const DEBUG = true;
 const DELAY = 100; // ms
@@ -28,22 +27,19 @@ async function sleep(ms) {
 
 async function connect_to_browser() {
     debug("## connecting to browser...");
-    for (let n = 0; n < 3; n++) {
-        try {
-            // FIXME: Port number should be configurable.
-            const browser = await puppeteer.connect({
-                browserURL: 'http://localhost:9000',
-                defaultViewport: null,
-            });
-            debug("done\n");
-            return browser;
-        } catch (err) {
-            exec('google-chrome --remote-debugging-port=9000',
-                function(error, stdout, stderr) {});
-            await sleep(DELAY * 5);
-        }
+    let browser;
+    try {
+        // FIXME: Port number should be configurable.
+        browser = await puppeteer.connect({
+            browserURL: 'http://localhost:9000',
+            defaultViewport: null,
+        });
+    } catch (err) {
+        debug('failed\n');
+        process.exit(1);
     }
-    console.log('Failed to connect to the browser');
+    debug("done\n");
+    return browser;
 }
 
 async function open_page(browser) {
