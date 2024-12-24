@@ -87,7 +87,11 @@ function display_diff(last_reply, reply) {
 
 async function send_query(page, query) {
     debug("## sending query...");
-    await page.$eval(FORM_SELECTOR, (el, str) => el.innerText = str, query);
+    if (FORM_SELECTOR.startsWith('textarea')) {
+	await page.type(FORM_SELECTOR, query);
+    } else {
+	await page.$eval(FORM_SELECTOR, (el, str) => el.innerText = str, query);
+    }
     const button = await page.waitForSelector(BUTTON_SELECTOR);
     // Record all already-displayed reples.
     let prev_elems = await page.$$(REPLY_SELECTOR);
@@ -175,6 +179,15 @@ function config_claude() {
     REPLY_PER_QUERY = 2;
 }
 
+function config_grok() {
+    ENGINE = 'Grok';
+    PAGE_URL = 'https://x.com/i/grok';
+    FORM_SELECTOR = 'textarea[placeholder="Ask anything"]';
+    BUTTON_SELECTOR = 'button[aria-label="Grok something"]';
+    REPLY_SELECTOR = 'span[style="text-overflow: unset;"]'; // FIXME
+    REPLY_PER_QUERY = 2;
+}
+
 function main() {
     // argv[2] is the first user-specified argument.
     let n = 2;
@@ -189,6 +202,8 @@ function main() {
                 config_gemini();
             if (engine == 'claude')
                 config_claude();
+            if (engine == 'grok')
+                config_grok();
             n += 2;
         } else if (arg == '-i') {
             (async () => {
