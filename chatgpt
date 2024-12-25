@@ -26,7 +26,7 @@ async function sleep(ms) {
 }
 
 async function connect_to_browser() {
-    debug("## connecting to browser...");
+    debug("## connecting\n");
     let browser;
     try {
         // FIXME: Port number should be configurable.
@@ -36,22 +36,20 @@ async function connect_to_browser() {
             defaultViewport: null,
         });
     } catch (err) {
-        debug('failed\n');
+        debug('Connection failed: unnable to connect localhost:9000\n');
         process.exit(1);
     }
-    debug("done\n");
     return browser;
 }
 
 async function open_page(browser) {
-    debug(`## opening ${ENGINE}...`);
+    debug('## opening\n');
     const pages = await browser.pages();
     for (const page of pages) {
         // Try to find the page visiting PAGE_URL.
         const url = page.url();
         if (url.indexOf(PAGE_URL) >= 0) {
             await page.bringToFront();
-            debug("done\n");
             return page;
         }
     }
@@ -59,7 +57,6 @@ async function open_page(browser) {
     const page = pages[0];
     await page.bringToFront();
     await page.goto(PAGE_URL);
-    debug('done\n');
     return page;
 }
 
@@ -88,7 +85,7 @@ function display_diff(last_reply, reply) {
 }
 
 async function send_query(page, query) {
-    debug("## sending query...");
+    debug("## sending\n");
     if (FORM_SELECTOR.startsWith('textarea')) {
 	await page.type(FORM_SELECTOR, query);
     } else {
@@ -98,22 +95,19 @@ async function send_query(page, query) {
     // Record all already-displayed reples.
     let prev_elems = await page.$$(REPLY_SELECTOR);
     await button.click();
-    debug("done\n");
 
     // Wait until reply starts displaying.
-    debug("## waiting for display...");
+    debug("## waiting display\n");
     while (true) {
         const elems = await page.$$(REPLY_SELECTOR);
-        debug('.');
         // ChatGPT and Gemini generate a single DIV, whereas Claude does two.
         if (elems.length - prev_elems.length >= REPLY_PER_QUERY) {
             break;
         }
         await sleep(200);
     }
-    debug('done\n');
 
-    debug("## waiting for initial reply...");
+    debug("## waiting initial\n");
     let elem;
     let last_reply = '';
     let nretires = 0;
@@ -123,23 +117,21 @@ async function send_query(page, query) {
         elem = elems[elems.length - 1];
         const reply = await get_text(page, elem);
         if (reply.length > 0) {
-            debug('done\n');
             display_diff(last_reply, reply);
             last_reply = reply;
             break;
         }
         await sleep(DELAY);
         nretires++;
-        debug('.');
         // Wait 10 seconds for the initial reply at most.
         if (nretires > 10000 / DELAY) {
-            console.log('No reply received.  Aborting...');
+            console.log(`No initial reply from ${ENGINE}.`);
             return;
         }
     }
 
     // Fetch the remaining reply.
-    debug("## fetching\n");
+    debug("## streaming\n");
     let reply;
     let nretries = 0;
     while (true) {
@@ -157,7 +149,7 @@ async function send_query(page, query) {
         await sleep(DELAY);
     }
     // Display the last line.
-    debug("## finished\n");
+    debug("## closed\n");
     const lines = reply.split('\n');
     // FIXME: This code may fail for a single-reply.
     console.log(lines[lines.length - 2]);
