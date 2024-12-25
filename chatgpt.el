@@ -102,11 +102,12 @@
 
 (defun chatgpt--process-filter (proc output)
   (with-current-buffer (process-buffer proc)
-    (if (string-match "## \\([A-Za-z ]+\\)" output)
-	(setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output))))
-    (save-excursion
-      (goto-char (point-max))
-      (insert output))))
+    (if (string-match "## \\([A-Za-z ]+\\)\n" output)
+	;; Discard output
+	(setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output)))
+      (save-excursion
+	(goto-char (point-max))
+	(insert output)))))
 
 (defun chatgpt-extract-reply ()
   (let ((reply (with-current-buffer (chatgpt--buffer-name)
