@@ -71,6 +71,8 @@ async function get_text(page, elem) {
         wordwrap: false,
     });
     text = text.replace(/\n\n+/g, '\n\n');
+    // Remove the garbages in ChatGPT.
+    text = text.replace('\nCopy code', '');
     // Remove the garbages at the bottom in Claude.
     text = text.replace('\nCopyRetry', '');
     return text;
@@ -81,7 +83,7 @@ function display_diff(last_reply, reply) {
     const last_lines = last_reply.split('\n');
     const lines = reply.split('\n');
     // The last line is not displayed since it may change later.
-    for (let n = last_lines.length - 1; n < lines.length - 1; n++)
+    for (let n = last_lines.length - 2; n < lines.length - 2; n++)
         console.log(lines[n]);
 }
 
@@ -158,6 +160,7 @@ async function send_query(page, query) {
     debug("## finished\n");
     const lines = reply.split('\n');
     // FIXME: This code may fail for a single-reply.
+    console.log(lines[lines.length - 2]);
     console.log(lines[lines.length - 1]);
 }
 
