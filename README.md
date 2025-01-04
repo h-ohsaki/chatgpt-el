@@ -46,10 +46,10 @@ program according to your environment.
 # INSTALLATION
 
 ``` sh
-> sudo npm i -g puppeteer
-> sudo npm i -g html-to-text
 > git clone https://github.com/h-ohsaki/chatgpt-el.git
 > cd chatgpt-el
+> npm i puppeteer-core
+> npm i html-to-text
 > sudo install -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
