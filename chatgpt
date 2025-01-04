@@ -6,7 +6,7 @@ const convert = require('html-to-text');
 
 const DEBUG = true;
 const DELAY = 100; // ms
-const TIMEOUT = 2000; // ms
+const TIMEOUT = 5000; // ms
 
 let ENGINE = 'ChatGPT';
 let PAGE_URL = 'https://chatgpt.com/';
@@ -68,10 +68,6 @@ async function get_text(page, elem) {
         wordwrap: false,
     });
     text = text.replace(/\n\n+/g, '\n\n');
-    // Remove the garbages in ChatGPT.
-    text = text.replace('\nCopy code', '');
-    // Remove the garbages at the bottom in Claude.
-    text = text.replace('\nCopyRetry', '');
     return text;
 }
 
