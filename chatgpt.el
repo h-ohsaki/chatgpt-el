@@ -59,7 +59,7 @@
 (defvar chatgpt--process nil)
 
 (defun chatgpt--buffer-name ()
-  (format "*%s reply*" chatgpt-engine))
+  (format "%s reply" chatgpt-engine))
 
 (defun chatgpt-mode ()
   (interactive)
@@ -70,7 +70,7 @@
   (make-local-variable 'font-lock-defaults)
   (setq font-lock-defaults
 	'(chatgpt-font-lock-keywords 'keywords-only nil))
-  (setq word-wrap t)
+  ;; (setq word-wrap t)
   (font-lock-mode 1))
   
 ;; (chatgpt-send-query "which of Emacs or vi is better?")
@@ -82,7 +82,7 @@
     (with-current-buffer buf
       (erase-buffer)
       (chatgpt-mode)
-      (setq mode-name chatgpt-engine)
+      (setq mode-name (format "%s: initializing" chatgpt-engine))
       (setq chatgpt--process (start-process chatgpt-engine buf chatgpt-prog
 					    "-e" chatgpt-engine
 					    "-q" query))
@@ -107,7 +107,23 @@
 	(setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output)))
       (save-excursion
 	(goto-char (point-max))
-	(insert output)))))
+	(insert output)
+	;; FIXME: Do not repeatedly format alyread-formatted part.
+	(chatgpt--format-buffer)))))
+
+(defun chatgpt--format-buffer ()
+  (save-excursion
+    ;; ChatGPT
+    (goto-char (point-min))
+    (while (re-search-forward "^\s*\\(undefined\\|bash\\|python\\|doc\\|Copy code\\|----------------------------------------\\)\n" nil t)
+      (replace-match ""))
+    ;; Calude
+    (goto-char (point-min))
+    (while (re-search-forward "^\s*\\(Copy\\|groov\\)\n" nil t)
+      (replace-match ""))
+    (goto-char (point-min))
+    (while (re-search-forward "^\\(\s*\n\\)+" nil t)
+      (replace-match "\n"))))
 
 (defun chatgpt-extract-reply ()
   (let ((reply (with-current-buffer (chatgpt--buffer-name)
