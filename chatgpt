@@ -6,7 +6,7 @@ const convert = require('html-to-text');
 
 const DEBUG = true;
 const DELAY = 100; // ms
-const TIMEOUT = 5000; // ms
+const TIMEOUT = 3000; // ms
 
 let ENGINE = 'ChatGPT';
 let PAGE_URL = 'https://chatgpt.com/';
@@ -17,7 +17,7 @@ let REPLY_PER_QUERY = 1;
 
 function debug(msg) {
     if (DEBUG) {
-        process.stdout.write(msg);
+        process.stderr.write(msg);
     }
 }
 
