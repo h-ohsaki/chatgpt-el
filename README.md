@@ -1,6 +1,6 @@
 # NAME
 
-chatgpt-el - access ChatGPT/Gemini/Calude from Emacs without APIs
+chatgpt-el - access ChatGPT/Gemini/Calude/DeepSeek from Emacs without APIs
 
 ![video](screenshot/video.gif)
 
@@ -124,13 +124,14 @@ Content-Type:application/json; charset=UTF-8
 }
 ```
 
-2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Claude page by
-runnning `chatgpt -i`.
+2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Claude/DeepSeek page
+by runnning `chatgpt -i`.
 
 ``` sh
 > ./chatgpt -i
 > ./chatgpt -e gemini -i
 > ./chatgpt -e claude -i
+> ./chatgpt -e deepseek -i
 ```
 
 3. Send a query (e.g., `hello`) to ChatGPT/Gemini/Calude.
@@ -142,10 +143,12 @@ Hello! How can I assist you today?
 Hello to you too! How can I help you today?
 > ./chatgpt -e claude -q hello
 Hi! How can I help you today?
+> ./chatgpt -e claude -q deepseek
+Hello! 😊 How can I assist you today? If you have any questions or need help with something, feel free to ask!
 ```
 
-This will show the reply from ChatGPT/Gemini/Calude, which must be equivalent
-to that shown in your Chromium/Chrome.
+This will show the reply from ChatGPT/Gemini/Calude/DeepSeek, which must be
+equivalent to that shown in your Chromium/Chrome.
 
 # FOR QUTEBROWSER USERS
 
