@@ -87,10 +87,16 @@ async function send_query(page, query) {
     } else {
 	await page.$eval(FORM_SELECTOR, (el, str) => el.innerText = str, query);
     }
-    const button = await page.waitForSelector(BUTTON_SELECTOR);
-    // Record all already-displayed reples.
-    let prev_elems = await page.$$(REPLY_SELECTOR);
-    await button.click();
+    let prev_elems;
+    if (BUTTON_SELECTOR == 'press_enter') {
+	prev_elems = await page.$$(REPLY_SELECTOR);
+	await page.keyboard.press('Enter');
+    } else {
+	const button = await page.waitForSelector(BUTTON_SELECTOR);
+	// Record all already-displayed reples.
+	prev_elems = await page.$$(REPLY_SELECTOR);
+	await button.click();
+    }
 
     // Wait until reply starts displaying.
     debug("## waiting display\n");
@@ -179,6 +185,15 @@ function config_grok() {
     REPLY_PER_QUERY = 2;
 }
 
+function config_deepseek() {
+    ENGINE = 'DeepSeek';
+    PAGE_URL = 'https://chat.deepseek.com';
+    FORM_SELECTOR = 'textarea#chat-input';
+    BUTTON_SELECTOR = 'press_enter'; // FIXME
+    REPLY_SELECTOR = 'div[class="ds-markdown ds-markdown--block"]'; // FIXME
+    REPLY_PER_QUERY = 1;
+}
+
 function main() {
     // argv[2] is the first user-specified argument.
     let n = 2;
@@ -195,6 +210,8 @@ function main() {
                 config_claude();
             if (engine == 'grok')
                 config_grok();
+            if (engine == 'deepseek')
+                config_deepseek();
             n += 2;
         } else if (arg == '-i') {
             (async () => {
