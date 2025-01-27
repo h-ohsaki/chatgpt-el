@@ -22,7 +22,8 @@
 (defvar chatgpt-engine "ChatGPT")
 (defvar chatgpt-engines-alist '((?1 . "ChatGPT")
 				(?2 . "Gemini")
-				(?3 . "Claude")))
+				(?3 . "Claude")
+				(?4 . "DeepSeek")))
 
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -103,8 +104,10 @@
 (defun chatgpt--process-filter (proc output)
   (with-current-buffer (process-buffer proc)
     (if (string-match "## \\([A-Za-z ]+\\)\n" output)
-	;; Discard output
+	;; Status message?
 	(setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output)))
+      ;; Otherwise, display at the end of the buffer.
+      (setq mode-name (format "%s: streaming @ %d" chatgpt-engine (point-max)))
       (save-excursion
 	(goto-char (point-max))
 	(insert output)
@@ -221,7 +224,7 @@
 ;; (chatgpt-select-engine)
 (defun chatgpt-select-engine ()
   (interactive)
-  (let ((key (read-char-choice "Select engine (1: ChatGPT, 2: Gemini, 3: Claude): "
+  (let ((key (read-char-choice "Select engine (1: ChatGPT, 2: Gemini, 3: Claude, 4: DeepSeek): "
 			       (mapcar #'car chatgpt-engines-alist))))
     (setq chatgpt-engine (cdr (assoc key chatgpt-engines-alist)))))
 
