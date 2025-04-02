@@ -1,6 +1,6 @@
 ;; -*- Emacs-Lisp -*-
 ;;
-;; Access ChatGTP from Emacs without OpenAI API.
+;; Access ChatGPT from Emacs without OpenAI API.
 ;; Copyright (C) 2023-2024 Hiroyuki Ohsaki.
 ;; All rights reserved.
 ;;

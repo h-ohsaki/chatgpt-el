@@ -1,13 +1,13 @@
 # NAME
 
-chatgpt-el - access ChatGPT/Gemini/Calude/DeepSeek from Emacs without APIs
+chatgpt-el - access ChatGPT/Gemini/Claude/DeepSeek from Emacs without APIs
 
 ![video](screenshot/video.gif)
 
 # DESCRIPTION
 
 **chatgpt-el** is an Emacs Lisp program designed to interactively access
-ChatGPT/Gemini/Calude from within Emacs.  While those AIs can be accessed via
+ChatGPT/Gemini/Claude from within Emacs.  While those AIs can be accessed via
 API interfaces using a programming language like Python and several modules,
 such access has several drawbacks.
 
@@ -20,7 +20,7 @@ such access has several drawbacks.
    monitoring of AI billing records.
 
 **chatgpt-el** solves the above issues by enabling access to
-ChatGPT/Gemini/Calude within Emacs without the use of an API key.  The program
+ChatGPT/Gemini/Claude within Emacs without the use of an API key.  The program
 is implemented using Chromium/Chrome browser's CDP (Chrome DevTools Protocol)
 (https://chromedevtools.github.io/devtools-protocol/), and therefore requires
 a CDP-enabled Chromium/Chrome browser to be running.  **chatgpt-el** operates
@@ -32,7 +32,7 @@ connection from the `chatgpt` script.
 ![overview](overview.png)
 
 Note that the implementation of the `chatgpt` script depends on the internal
-structure of the HTML file returned by the ChatGPT/Gemini/Calude server. If
+structure of the HTML file returned by the ChatGPT/Gemini/Claude server. If
 `chatgpt` does not work in your environment, you may need to modify the
 program according to your environment.
 
@@ -73,30 +73,30 @@ such as Puppeteer and html-to-text must be accessible from `chatgpt` program.
 > chromium --remote-debugging-port=9000
 ```
 
-2. Visit ChatGPT/Gemini/Calude in Chromium/Chrome, and login with your
+2. Visit ChatGPT/Gemini/Claude in Chromium/Chrome, and login with your
    account.
 
-3. On Emacs, move the point (i.e., the cursor in Emacs) at the end of the
+3. In Emacs, move the point (i.e., the cursor in Emacs) at the end of the
    query text.  Alternatively, you can select the region containing the query
    text.  Then, type `C-c q` or execute `M-x chatgpt-query`.  With a prefix
    argument (e.g., `C-u C-c q`), you will be prompted what query prefix is
    prepended to the query text.
 
-4. The query is automatically submitted to ChatGPT/Gemini/Calude in your
-   Chromium/Chrome.  The reply from the ChatGPT/Gemini/Calude will be
+4. The query is automatically submitted to ChatGPT/Gemini/Claude in your
+   Chromium/Chrome.  The reply from the ChatGPT/Gemini/Claude will be
    displayed in another buffer in Emacs.
 
 5. Once the reply is displayed, type `C-c Q` or execute M-x
-   chatgpt-insert-reply from Emacs.  The reply from ChatGPT/Gemini/Calude is
+   chatgpt-insert-reply from Emacs.  The reply from ChatGPT/Gemini/Claude is
    inserted at the current point.
 
-6. If there are further responses from ChatGPT/Gemini/Calude, type `C-u C-u
+6. If there are further responses from ChatGPT/Gemini/Claude, type `C-u C-u
    C-c q` to display the continuation of ChatGPT's response in the buffer of
    Emacs.
    
 7. When requesting translation or proofreading of a text for
-   ChatGPT/Gemini/Calude, it is possible to replace the query text with the
-   response from ChatGPT/Gemini/Calude. To do this, type `C-u C-u C-c Q`.
+   ChatGPT/Gemini/Claude, it is possible to replace the query text with the
+   response from ChatGPT/Gemini/Claude. To do this, type `C-u C-u C-c Q`.
 
 # TROUBLE SHOOTING
 
@@ -125,7 +125,7 @@ Content-Type:application/json; charset=UTF-8
 ```
 
 2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Claude/DeepSeek page
-by runnning `chatgpt -i`.
+by running `chatgpt -i`.
 
 ``` sh
 > ./chatgpt -i
@@ -134,7 +134,7 @@ by runnning `chatgpt -i`.
 > ./chatgpt -e deepseek -i
 ```
 
-3. Send a query (e.g., `hello`) to ChatGPT/Gemini/Calude.
+3. Send a query (e.g., `hello`) to ChatGPT/Gemini/Claude.
 
 ``` sh
 > ./chatgpt -q hello
@@ -147,7 +147,7 @@ Hi! How can I help you today?
 Hello! 😊 How can I assist you today? If you have any questions or need help with something, feel free to ask!
 ```
 
-This will show the reply from ChatGPT/Gemini/Calude/DeepSeek, which must be
+This will show the reply from ChatGPT/Gemini/Claude/DeepSeek, which must be
 equivalent to that shown in your Chromium/Chrome.
 
 # FOR QUTEBROWSER USERS
