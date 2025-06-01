@@ -64,9 +64,11 @@ async function get_text(page, elem) {
     // Covert the HTML at ELEM to text format.
     const html = await page.evaluate(el => el.innerHTML, elem);
     let text = convert.convert(html, {
-        preserveNewlines: true,
+        preserveNewlines: false,
         wordwrap: false,
     });
+    // Remove unnecessary spaces.
+    text = text.replace(/ +\n/g, '\n');
     text = text.replace(/\n\n+/g, '\n\n');
     return text;
 }
