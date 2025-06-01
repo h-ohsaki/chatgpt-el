@@ -103,17 +103,17 @@
 
 (defun chatgpt--process-filter (proc output)
   (with-current-buffer (process-buffer proc)
-    (if (string-match "## \\([A-Za-z ]+\\)\n" output)
-	;; Status message?
-	(setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output)))
-      ;; Otherwise, display at the end of the buffer.
-      (setq mode-name (format "%s: streaming @ %d" chatgpt-engine (point-max)))
-      (save-excursion
-	(goto-char (point-max))
-	(insert output)
-	;; FIXME: Do not repeatedly format alyread-formatted part.
-	(chatgpt--format-buffer)))))
-
+    (when (string-match "## \\([A-Za-z ]+\\)\n" output)
+      ;; Status message?
+      (setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output)))
+      (setq output (substring output (match-end 0))))
+    ;; Display at the end of the buffer.
+    (save-excursion
+      (goto-char (point-max))
+      (insert output)
+      ;; FIXME: Do not repeatedly format alyread-formatted part.
+      (chatgpt--format-buffer))))
+	
 (defun chatgpt--format-buffer ()
   (save-excursion
     ;; ChatGPT
