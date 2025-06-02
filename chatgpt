@@ -3,12 +3,48 @@
 // https://pptr.dev/
 const puppeteer = require('puppeteer-core');
 
-let ENGINE = 'ChatGPT';
-let PAGE_URL = 'https://chatgpt.com/';
-let FORM_SELECTOR = 'p.placeholder';
-let BUTTON_SELECTOR = 'button[data-testid="send-button"]';
-let REPLY_SELECTOR = 'div[data-message-author-role="assistant"]';
-let REPLY_PER_QUERY = 1;
+const CONFIGS = {
+    chatgpt: {
+        engine: 'ChatGPT',
+        page_url: 'https://chatgpt.com/',
+        form_selector: 'p.placeholder',
+        button_selector: 'button[data-testid="send-button"]',
+        reply_selector: 'div[data-message-author-role="assistant"]',
+        reply_per_query: 1
+    },
+    gemini: {
+        engine: 'Gemini',
+        page_url: 'https://gemini.google.com/',
+        form_selector: 'div.textarea',
+        button_selector: 'mat-icon[fonticon="send"]',
+        reply_selector: 'message-content',
+        reply_per_query: 1
+    },
+    claude: {
+        engine: 'Claude',
+        page_url: 'https://claude.ai/',
+        form_selector: 'p[data-placeholder]',
+        button_selector: 'button[aria-label="Send Message"]',
+        reply_selector: 'div[data-test-render-count]',
+        reply_per_query: 2
+    },
+    grok: {
+        engine: 'Grok',
+        page_url: 'https://x.com/i/grok',
+        form_selector: 'textarea[placeholder="Ask anything"]',
+        button_selector: 'button[aria-label="Grok something"]',
+        reply_selector: 'span[style="text-overflow: unset;"]',
+        reply_per_query: 2
+    },
+    deepseek: {
+        engine: 'DeepSeek',
+        page_url: 'https://chat.deepseek.com',
+        form_selector: 'textarea#chat-input',
+        button_selector: 'press_enter',
+        reply_selector: 'div[class="ds-markdown ds-markdown--block"]',
+        reply_per_query: 1
+    }
+};
 
 function debug(msg) {
     process.stderr.write(msg);
@@ -34,86 +70,50 @@ async function connect_to_browser() {
     return browser;
 }
 
-async function open_page(browser) {
+async function open_page(config, browser) {
     const pages = await browser.pages();
     for (const page of pages) {
         // Try to find the page visiting PAGE_URL.
         const url = page.url();
-        if (url.indexOf(PAGE_URL) >= 0) {
-            await page.bringToFront();
+        if (url.indexOf(config.page_url) >= 0) {
+            // await page.bringToFront();
             return page;
         }
     }
     // Newly open the page if not already visiting.
     const page = pages[0];
-    await page.bringToFront();
-    await page.goto(PAGE_URL);
+    // await page.bringToFront();
+    await page.goto(config.page_url);
     return page;
 }
 
-async function send_query(page, query) {
+async function send_query(config, page, query) {
     // Fill the input form with the query.
-    if (FORM_SELECTOR.startsWith('textarea')) {
-	await page.type(FORM_SELECTOR, query);
+    if (config.form_selector.startsWith('textarea')) {
+	await page.type(config.form_selector, query);
     } else {
-	await page.$eval(FORM_SELECTOR, (el, str) => el.innerText = str, query);
+	await page.$eval(config.form_selector, (el, str) => el.innerText = str, query);
     }
     // Press the submit button.
-    if (BUTTON_SELECTOR == 'press_enter') {
+    if (config.button_selector == 'press_enter') {
 	await page.keyboard.press('Enter');
     } else {
-	const button = await page.waitForSelector(BUTTON_SELECTOR);
+	const button = await page.waitForSelector(config.button_selector);
 	await button.click();
     }
 }
 
-async function receive(page) {
+async function receive(config, page) {
     const html = await page.evaluate((selector) => {
 	const elems = document.querySelectorAll(selector);
 	const elem = elems[elems.length - 1];
 	return elem.innerHTML;
-    }, REPLY_SELECTOR);
+    }, config.reply_selector);
     console.log(html);
-    return;
-}
-
-function config_gemini() {
-    ENGINE = 'Gemini';
-    PAGE_URL = 'https://gemini.google.com/';
-    FORM_SELECTOR = 'div.textarea';
-    BUTTON_SELECTOR = 'mat-icon[fonticon="send"]';
-    REPLY_SELECTOR = 'message-content';
-    REPLY_PER_QUERY = 1;
-}
-
-function config_claude() {
-    ENGINE = 'Claude';
-    PAGE_URL = 'https://claude.ai/';
-    FORM_SELECTOR = 'p[data-placeholder]';
-    BUTTON_SELECTOR = 'button[aria-label="Send Message"]';
-    REPLY_SELECTOR = 'div[data-test-render-count]';
-    REPLY_PER_QUERY = 2;
-}
-
-function config_grok() {
-    ENGINE = 'Grok';
-    PAGE_URL = 'https://x.com/i/grok';
-    FORM_SELECTOR = 'textarea[placeholder="Ask anything"]';
-    BUTTON_SELECTOR = 'button[aria-label="Grok something"]';
-    REPLY_SELECTOR = 'span[style="text-overflow: unset;"]'; // FIXME
-    REPLY_PER_QUERY = 2;
-}
-
-function config_deepseek() {
-    ENGINE = 'DeepSeek';
-    PAGE_URL = 'https://chat.deepseek.com';
-    FORM_SELECTOR = 'textarea#chat-input';
-    BUTTON_SELECTOR = 'press_enter'; // FIXME
-    REPLY_SELECTOR = 'div[class="ds-markdown ds-markdown--block"]'; // FIXME
-    REPLY_PER_QUERY = 1;
 }
 
 function main() {
+    let config = CONFIGS.chatgpt;
     // argv[2] is the first user-specified argument.
     let n = 2;
     // Parse options and arguments.
@@ -122,20 +122,12 @@ function main() {
         if (arg == '-e') {
             let engine = process.argv[n + 1];
             engine = engine.toLowerCase();
-            // Use ChatGPT by default.
-            if (engine == 'gemini')
-                config_gemini();
-            if (engine == 'claude')
-                config_claude();
-            if (engine == 'grok')
-                config_grok();
-            if (engine == 'deepseek')
-                config_deepseek();
+	    config = CONFIGS[engine];
             n += 2;
         } else if (arg == '-i') {
             (async () => {
                 const browser = await connect_to_browser();
-                const page = await open_page(browser);
+                const page = await open_page(config, browser);
                 process.exit(0);
             })();
             n++;
@@ -143,18 +135,16 @@ function main() {
             (async () => {
                 const query = process.argv[n + 1];
                 const browser = await connect_to_browser();
-                const page = await open_page(browser);
-                await send_query(page, query);
+                const page = await open_page(config, browser);
+                await send_query(config, page, query);
                 process.exit(0);
             })();
             n += 2;
         } else if (arg == '-r') {
             (async () => {
                 const browser = await connect_to_browser();
-                // const page = await open_page(browser);
-		const pages = await browser.pages();
-		const page = pages[0];
-                await receive(page);
+                const page = await open_page(config, browser);
+                await receive(config, page);
                 process.exit(0);
             })();
             n += 1;
