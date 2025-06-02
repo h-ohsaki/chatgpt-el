@@ -1,7 +1,7 @@
 ;; -*- Emacs-Lisp -*-
 ;;
 ;; Access ChatGPT from Emacs without OpenAI API.
-;; Copyright (C) 2023-2024 Hiroyuki Ohsaki.
+;; Copyright (C) 2023-2025 Hiroyuki Ohsaki.
 ;; All rights reserved.
 ;;
 
@@ -53,14 +53,18 @@
     ("\".+?\"" . font-lock-string-face)
     ("'.+?'" . font-lock-string-face)))
 
+(defvar chatgpt-query-complete-hooks 'chatgpt--save-reply)
+
+(defvar chatgpt--buffer-name "*ChatGPT reply*")
+(defvar chatgpt--tmpbuffer-name "*ChatGPT temp*")
+
 (defvar chatgpt--last-query nil)
-(defvar chatgpt-query-complete-hooks 'chatgpt-save-reply)
 (defvar chatgpt--last-query-beg nil)
 (defvar chatgpt--last-query-end nil)
+(defvar chatgpt--last-reply nil)
 (defvar chatgpt--process nil)
-
-(defun chatgpt--buffer-name ()
-  (format "%s reply" chatgpt-engine))
+(defvar chatgpt--timer nil)
+(defvar chatgpt--timer-count nil)
 
 (defun chatgpt-mode ()
   (interactive)
@@ -74,76 +78,9 @@
   ;; (setq word-wrap t)
   (font-lock-mode 1))
   
-;; (chatgpt-send-query "which of Emacs or vi is better?")
-;; (chatgpt-send-query "what is Emacs's interesting history?")
-(defun chatgpt-send-query (query)
-  (interactive)
-  (let ((buf (get-buffer-create (chatgpt--buffer-name))))
-    ;; Initialize the reply buffer.
-    (with-current-buffer buf
-      (erase-buffer)
-      (chatgpt-mode)
-      (setq mode-name (format "%s: initializing" chatgpt-engine))
-      (setq chatgpt--process (start-process chatgpt-engine buf chatgpt-prog
-					    "-e" chatgpt-engine
-					    "-q" query))
-      (set-process-sentinel chatgpt--process
-			    'chatgpt--process-sentinel)
-      (set-process-filter chatgpt--process 'chatgpt--process-filter))
-    ;; Display in the other window.
-    (delete-other-windows)
-    (split-window)
-    (set-window-buffer (next-window) buf))
-  (setq chatgpt--last-query query))
-
-(defun chatgpt--process-sentinel (proc event)
-  ;; Is process completed?
-  (when (string-match-p "finished" event)
-    (run-hooks 'chatgpt-query-complete-hooks)))
-
-(defun chatgpt--process-filter (proc output)
-  (with-current-buffer (process-buffer proc)
-    (when (string-match "## \\([A-Za-z ]+\\)\n" output)
-      ;; Status message?
-      (setq mode-name (format "%s: %s" chatgpt-engine (match-string 1 output)))
-      (setq output (substring output (match-end 0))))
-    ;; Display at the end of the buffer.
-    (save-excursion
-      (goto-char (point-max))
-      (insert output)
-      ;; FIXME: Do not repeatedly format alyread-formatted part.
-      (chatgpt--format-buffer))))
-	
-(defun chatgpt--format-buffer ()
-  (save-excursion
-    ;; ChatGPT
-    (goto-char (point-min))
-    (while (re-search-forward "^\s*\\(undefined\\|bash\\|python\\|doc\\|Copy code\\|----------------------------------------\\)\n" nil t)
-      (replace-match ""))
-    ;; Calude
-    (goto-char (point-min))
-    (while (re-search-forward "^\s*\\(Copy\\|groov\\)\n" nil t)
-      (replace-match ""))
-    (goto-char (point-min))
-    (while (re-search-forward "^\\(\s*\n\\)+" nil t)
-      (replace-match "\n"))))
-
-(defun chatgpt-extract-reply ()
-  (let ((reply (with-current-buffer (chatgpt--buffer-name)
-		 (buffer-string))))
-    (with-temp-buffer
-      (insert reply)
-      (goto-char (point-min))
-      (while (re-search-forward "## .*\n" nil t)
-	(replace-match ""))
-      (buffer-string))))
-
-;; (chatgpt-lookup "Emacs")
-(defun chatgpt-lookup (query)
-  (interactive (list (read-string (format "%s lookup: " chatgpt-engine)
-				  (thing-at-point 'word))))
-  (chatgpt-send-query query))
-
+
+;; ---------------- Low level interfaces
+;; (chatgpt--read-prefix)
 (defun chatgpt--read-prefix ()
   (let* ((ch (read-char
 	      "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[r]ewrite/{R]ewrite/[d]oc): "))
@@ -153,6 +90,7 @@
 	(concat prefix " ")
       nil)))
 
+;; (chatgpt--read-query "")
 (defun chatgpt--read-query (prefix)
   (let (beg-pos end-pos query)
     (cond
@@ -181,6 +119,97 @@
     (setq chatgpt--last-query-end end-pos)
     query))
 
+;; (chatgpt--send-query "which of Emacs or vi is better?")
+;; (chatgpt--send-query "what is Emacs's interesting history?")
+(defun chatgpt--send-query (query)
+  ;; Compose a query in a temporary buffer.
+  (chatgpt--start-monitor)
+  (call-process chatgpt-prog nil chatgpt--buffer-name nil "-e" chatgpt-engine "-s" query)
+  (setq chatgpt--last-query query))
+
+(defun chatgpt--extract-reply ()
+  (let* ((tmpbuf (get-buffer-create chatgpt--tmpbuffer-name)))
+    (with-current-buffer tmpbuf
+      (buffer-string))))
+
+;; (chatgpt--save-reply)
+(defun chatgpt--save-reply ()
+  (interactive)
+  (let* ((save-silently t)
+	 (file (format "~/.chatgpt-%s.org" chatgpt-engine)))
+    (with-temp-buffer
+      (insert "\n** ")
+      (chatgpt-insert-reply '(4))
+      (write-region (point-min) (point-max) file 'append))))
+
+;; ---------------- Reply monitor.
+;; (chatgpt--start-monitor)
+(defun chatgpt--start-monitor ()
+  (interactive)
+  (let ((buf (get-buffer-create chatgpt--buffer-name)))
+    ;; Initialize the reply buffer.
+    (with-current-buffer buf
+      (erase-buffer)
+      (chatgpt-mode)
+      (setq mode-name (format "%s waiting" chatgpt-engine)))
+    ;; Display in the other window.
+    (delete-other-windows)
+    (split-window)
+    (set-window-buffer (next-window) buf))
+  ;; Schedule the next timer event.
+  (setq chatgpt--timer-count 0)
+  (chatgpt--sched-timer-event))
+
+;; (chatgpt--sched-timer-event)
+(defun chatgpt--sched-timer-event ()
+  (run-with-timer 1. nil 'chatgpt--timer-event))
+
+;; (chatgpt--timer-event)
+(defun chatgpt--timer-event ()
+  ;; Stop the process if already running.
+  (if (memq chatgpt--process (process-list))
+      (kill-process chatgpt--process))
+  (let ((tmpbuf (get-buffer-create chatgpt--tmpbuffer-name)))
+    (with-current-buffer tmpbuf
+      (erase-buffer)
+      (setq chatgpt--process (start-process "chatgpt" tmpbuf chatgpt-prog "-r"))
+      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))))
+
+(defun chatgpt--process-sentinel (proc event)
+  ;; Is process completed?
+  (when (string-match-p "finished" event)
+    (let* ((reply (chatgpt--extract-reply)))
+      (if (string= reply chatgpt--last-reply)
+	  ;; No update.
+	  (setq chatgpt--timer-count (1+ chatgpt--timer-count))
+	;; Updated.
+	(let ((buf (get-buffer-create chatgpt--buffer-name))
+              last-pos)
+	  (with-current-buffer buf
+	    (setq mode-name (format "%s reply" chatgpt-engine))
+            (setq last-pos (point))
+            (save-excursion
+              (erase-buffer)
+              (insert reply)
+	      (shr-render-region (point-min) (point-max)))
+            (goto-char last-pos)))
+	(setq chatgpt--last-reply reply)
+	(setq chatgpt--timer-count 0)))
+    ;; Schedule next event if it seems reply is in progress.
+    (if (< chatgpt--timer-count 10)
+	;; Continue
+	(chatgpt--sched-timer-event)
+      ;; Finished
+      (run-hooks 'chatgpt-query-complete-hooks))))
+
+;; ---------------- User-level interfaces.
+;; (chatgpt-select-engine)
+(defun chatgpt-select-engine ()
+  (interactive)
+  (let ((key (read-char-choice "Select engine (1: ChatGPT, 2: Gemini, 3: Claude, 4: DeepSeek): "
+			       (mapcar #'car chatgpt-engines-alist))))
+    (setq chatgpt-engine (cdr (assoc key chatgpt-engines-alist)))))
+
 ;; (chatgpt-query "Emacs")
 (defun chatgpt-query (arg)
   (interactive "P")
@@ -192,7 +221,13 @@
 	   (setq prefix (chatgpt--read-prefix))))
     (unless query
       (setq query (chatgpt--read-query prefix)))
-    (chatgpt-send-query (concat prefix query))))
+    (chatgpt--send-query (concat prefix query))))
+
+;; (chatgpt-lookup "Emacs")
+(defun chatgpt-lookup (query)
+  (interactive (list (read-string (format "%s lookup: " chatgpt-engine)
+				  (thing-at-point 'word))))
+  (chatgpt--send-query query))
 
 ;; (chatgpt-insert-reply nil)
 ;; (chatgpt-insert-reply t)
@@ -208,24 +243,6 @@
     (when (equal arg '(4))
       (insert "Q. " chatgpt--last-query "\n\n")
       (insert "A. "))
-    (insert (string-trim (chatgpt-extract-reply)))))
-
-;; (chatgpt-save-reply)
-(defun chatgpt-save-reply ()
-  (interactive)
-  (let* ((save-silently t)
-	 (base (format-time-string "%Y%m%d-%H%M%S"))
-	 (file (format "~/var/log/chatgpt/%s-%s" chatgpt-engine base)))
-    (with-temp-buffer
-      (insert "\n")
-      (chatgpt-insert-reply '(4))
-      (write-region (point-min) (point-max) file 'append))))
-
-;; (chatgpt-select-engine)
-(defun chatgpt-select-engine ()
-  (interactive)
-  (let ((key (read-char-choice "Select engine (1: ChatGPT, 2: Gemini, 3: Claude, 4: DeepSeek): "
-			       (mapcar #'car chatgpt-engines-alist))))
-    (setq chatgpt-engine (cdr (assoc key chatgpt-engines-alist)))))
+    (insert (string-trim (chatgpt--extract-reply)))))
 
 (provide 'chatgpt)
