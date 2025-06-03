@@ -1,15 +1,15 @@
 # NAME
 
-chatgpt-el - access ChatGPT/Gemini/Claude/DeepSeek from Emacs without APIs
+chatgpt-el - interactively access ChatGPT/Gemini/Claude/DeepSeek from Emacs without APIs
 
 ![video](screenshot/video.gif)
 
 # DESCRIPTION
 
 **chatgpt-el** is an Emacs Lisp program designed to interactively access
-ChatGPT/Gemini/Claude from within Emacs.  While those AIs can be accessed via
-API interfaces using a programming language like Python and several modules,
-such access has several drawbacks.
+ChatGPT/Gemini/Claude/DeepSeek from within Emacs.  While those AIs can be
+accessed via API interfaces using a programming language like Python and
+several modules, such access has several drawbacks.
 
 1. Batch processing through APIs is slow; accessing APIs is slow, and
    responses can often take an unnecessarily long time. Such slow response
@@ -19,9 +19,9 @@ such access has several drawbacks.
    card registration. Frequent use of AIs can lead to high costs and require
    monitoring of AI billing records.
 
-**chatgpt-el** solves the above issues by enabling access to
-ChatGPT/Gemini/Claude within Emacs without the use of an API key.  The program
-is implemented using Chromium/Chrome browser's CDP (Chrome DevTools Protocol)
+**chatgpt-el** solves the above issues by enabling access to AIs within Emacs
+without the use of an API key.  The program is implemented using
+Chromium/Chrome browser's CDP (Chrome DevTools Protocol)
 (https://chromedevtools.github.io/devtools-protocol/), and therefore requires
 a CDP-enabled Chromium/Chrome browser to be running.  **chatgpt-el** operates
 by remotely controlling your instance of Chromium/Chrome using the Node.js
@@ -32,16 +32,15 @@ connection from the `chatgpt` script.
 ![overview](overview.png)
 
 Note that the implementation of the `chatgpt` script depends on the internal
-structure of the HTML file returned by the ChatGPT/Gemini/Claude server. If
-`chatgpt` does not work in your environment, you may need to modify the
-program according to your environment.
+structure of the HTML file returned by the AI server. If `chatgpt` does not
+work in your environment, you may need to modify the program according to your
+environment.
 
 # PREREQUISITES
 
 - Chromium or Chrome browser (or other browsers supporting the CDP protocol).
 - Node.js (https://nodejs.org/en).
 - Puppeteer module (https://pptr.dev/)
-- html-to-text moudle (https://github.com/html-to-text/node-html-to-text)
 
 # INSTALLATION
 
@@ -49,7 +48,6 @@ program according to your environment.
 > git clone https://github.com/h-ohsaki/chatgpt-el.git
 > cd chatgpt-el
 > npm i puppeteer-core
-> npm i html-to-text
 > sudo install -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
@@ -63,7 +61,7 @@ EOF
 ```
 
 You can place `chatgpt` script anywhere in your system, but Node.js modules
-such as Puppeteer and html-to-text must be accessible from `chatgpt` program.
+such as Puppeteer must be accessible from `chatgpt` program.
 
 # USAGE
 
@@ -73,8 +71,8 @@ such as Puppeteer and html-to-text must be accessible from `chatgpt` program.
 > chromium --remote-debugging-port=9000
 ```
 
-2. Visit ChatGPT/Gemini/Claude in Chromium/Chrome, and login with your
-   account.
+2. Visit ChatGPT/Gemini/Claude/DeepSeek in Chromium/Chrome, and login with
+   your account.
 
 3. In Emacs, move the point (i.e., the cursor in Emacs) at the end of the
    query text.  Alternatively, you can select the region containing the query
@@ -82,21 +80,19 @@ such as Puppeteer and html-to-text must be accessible from `chatgpt` program.
    argument (e.g., `C-u C-c q`), you will be prompted what query prefix is
    prepended to the query text.
 
-4. The query is automatically submitted to ChatGPT/Gemini/Claude in your
-   Chromium/Chrome.  The reply from the ChatGPT/Gemini/Claude will be
-   displayed in another buffer in Emacs.
+4. The query is automatically submitted to the AI in your Chromium/Chrome.
+   The reply from the AI will be displayed in another buffer in Emacs.
 
 5. Once the reply is displayed, type `C-c Q` or execute M-x
-   chatgpt-insert-reply from Emacs.  The reply from ChatGPT/Gemini/Claude is
-   inserted at the current point.
+   chatgpt-insert-reply from Emacs.  The reply from the AI is inserted at the
+   current point.
 
-6. If there are further responses from ChatGPT/Gemini/Claude, type `C-u C-u
-   C-c q` to display the continuation of ChatGPT's response in the buffer of
-   Emacs.
+6. If there are further responses from the AI, type `C-u C-u C-c q` to display
+   the continuation of AI's response in the buffer of Emacs.
    
-7. When requesting translation or proofreading of a text for
-   ChatGPT/Gemini/Claude, it is possible to replace the query text with the
-   response from ChatGPT/Gemini/Claude. To do this, type `C-u C-u C-c Q`.
+7. When requesting translation or proofreading of a text for the AI, it is
+   possible to replace the query text with the response from
+   ChatGPT/Gemini/Claude. To do this, type `C-u C-u C-c Q`.
 
 # TROUBLE SHOOTING
 
@@ -134,21 +130,20 @@ by running `chatgpt -i`.
 > ./chatgpt -e deepseek -i
 ```
 
-3. Send a query (e.g., `hello`) to ChatGPT/Gemini/Claude.
+3. Send a query (e.g., `hello`) to the AI.
 
 ``` sh
-> ./chatgpt -q hello
-Hello! How can I assist you today?
-> ./chatgpt -e gemini -q hello
-Hello to you too! How can I help you today?
-> ./chatgpt -e claude -q hello
-Hi! How can I help you today?
-> ./chatgpt -e claude -q deepseek
-Hello! 😊 How can I assist you today? If you have any questions or need help with something, feel free to ask!
+> ./chatgpt -s hello
+> ./chatgpt -r
+<div class="flex w-full flex-col gap-1 empty:hidden first:pt-[3px]"><div class="markdown prose dark:prose-invert w-full break-words dark"><p data-start="0" data-end="37" data-is-last-node="" data-is-only-node="">Hello! 😊<br data-start="9" data-end="12">
+How can I help you today?</p></div></div>
+> ./chatgpt -e gemini -s hello
+> ./chatgpt -e gemini -r
+<div _ngcontent-ng-c3682768483="" class="markdown markdown-main-panel stronger enable-updated-hr-color" id="model-response-message-contentr_d1f3fd77a101a596" dir="ltr" style="--animation-duration: 600ms; --fade-animation-function: linear;"><p data-sourcepos="1:1-1:32">Hello! How can I help you today?</p></div>
 ```
 
-This will show the reply from ChatGPT/Gemini/Claude/DeepSeek, which must be
-equivalent to that shown in your Chromium/Chrome.
+This will show the reply from the AI, which must be equivalent to that shown
+in your Chromium/Chrome.
 
 # FOR QUTEBROWSER USERS
 
