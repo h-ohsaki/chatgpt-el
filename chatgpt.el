@@ -121,7 +121,8 @@
 ;; (chatgpt--send-query "what is Emacs's interesting history?")
 (defun chatgpt--send-query (query)
   (chatgpt--start-monitor)
-  (call-process chatgpt-prog nil chatgpt--buffer-name nil "-e" chatgpt-engine "-s" query)
+  (call-process chatgpt-prog nil chatgpt--buffer-name nil
+		"-e" chatgpt-engine "-s" query)
   (setq chatgpt--last-query query))
 
 ;; (chatgpt--extract-reply)
@@ -138,7 +139,8 @@
 (defun chatgpt--save-reply ()
   (interactive)
   (let* ((save-silently t)
-	 (file (format "~/.chatgpt-%s.org" chatgpt-engine)))
+         (base (format-time-string "%Y%m%d-%H%M%S"))
+	 (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt-engine base)))
     (with-temp-buffer
       (insert "\n** ")
       (chatgpt-insert-reply '(4))
@@ -163,7 +165,7 @@
 
 ;; (chatgpt--sched-timer-event)
 (defun chatgpt--sched-timer-event ()
-  (run-with-timer 1. nil 'chatgpt--timer-event))
+  (run-with-timer .2 nil 'chatgpt--timer-event))
 
 ;; (chatgpt--timer-event)
 (defun chatgpt--timer-event ()
@@ -173,7 +175,8 @@
   (let ((buf (get-buffer-create chatgpt--raw-buffer-name)))
     (with-current-buffer buf
       (erase-buffer)
-      (setq chatgpt--process (start-process "chatgpt" buf chatgpt-prog "-r"))
+      (setq chatgpt--process (start-process "chatgpt" buf 
+					    chatgpt-prog "-e" chatgpt-engine "-r"))
       (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))))
 
 (defun chatgpt--process-sentinel (proc event)
