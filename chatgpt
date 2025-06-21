@@ -8,7 +8,7 @@ const CONFIGS = {
         engine: 'ChatGPT',
         page_url: 'https://chatgpt.com/',
         form_selector: 'p.placeholder',
-        button_selector: 'button[data-testid="send-button"]',
+        button_selector: 'button[aria-label="Send prompt"]',
         reply_selector: 'div[data-message-author-role="assistant"]',
         reply_per_query: 1
     },
@@ -16,7 +16,7 @@ const CONFIGS = {
         engine: 'Gemini',
         page_url: 'https://gemini.google.com/',
         form_selector: 'div.textarea',
-        button_selector: 'mat-icon[fonticon="send"]',
+        button_selector: 'button[aria-label="Send message"]',
         reply_selector: 'message-content',
         reply_per_query: 1
     },
@@ -24,16 +24,8 @@ const CONFIGS = {
         engine: 'Claude',
         page_url: 'https://claude.ai/',
         form_selector: 'p[data-placeholder]',
-        button_selector: 'button[aria-label="Send Message"]',
+        button_selector: 'button[aria-label="Send message"]',
         reply_selector: 'div[data-test-render-count]',
-        reply_per_query: 2
-    },
-    grok: {
-        engine: 'Grok',
-        page_url: 'https://x.com/i/grok',
-        form_selector: 'textarea[placeholder="Ask anything"]',
-        button_selector: 'button[aria-label="Grok something"]',
-        reply_selector: 'span[style="text-overflow: unset;"]',
         reply_per_query: 2
     },
     deepseek: {
@@ -43,7 +35,15 @@ const CONFIGS = {
         button_selector: 'press_enter',
         reply_selector: 'div[class="ds-markdown ds-markdown--block"]',
         reply_per_query: 1
-    }
+    },
+    grok: {
+        engine: 'Grok',
+        page_url: 'https://x.com/i/grok',
+        form_selector: 'textarea[placeholder="Ask anything"]',
+        button_selector: 'button[aria-label="Grok something"]',
+        reply_selector: 'span[style="text-overflow: unset;"]',
+        reply_per_query: 2
+    },
 };
 
 function debug(msg) {
@@ -89,6 +89,7 @@ async function open_page(config, browser) {
 
 async function send_query(config, page, query) {
     // Fill the input form with the query.
+    const form = await page.waitForSelector(config.form_selector);
     if (config.form_selector.startsWith('textarea')) {
 	await page.type(config.form_selector, query);
     } else {
