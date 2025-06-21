@@ -53,14 +53,13 @@
     ("\".+?\"" . font-lock-string-face)
     ("'.+?'" . font-lock-string-face)))
 
-(defvar chatgpt-query-complete-hooks 'chatgpt--save-reply)
-
 (defvar chatgpt--buffer-name "*ChatGPT reply*")
 (defvar chatgpt--raw-buffer-name "*ChatGPT raw*")
 
 (defvar chatgpt--last-query nil)
 (defvar chatgpt--last-query-beg nil)
 (defvar chatgpt--last-query-end nil)
+(defvar chatgpt--last-query-unsaved nil)
 (defvar chatgpt--last-raw-reply nil)
 (defvar chatgpt--process nil)
 (defvar chatgpt--timer nil)
@@ -120,10 +119,12 @@
 ;; (chatgpt--send-query "which of Emacs or vi is better?")
 ;; (chatgpt--send-query "what is Emacs's interesting history?")
 (defun chatgpt--send-query (query)
+  (chatgpt--save-reply)
   (chatgpt--start-monitor)
   (call-process chatgpt-prog nil chatgpt--buffer-name nil
 		"-e" chatgpt-engine "-s" query)
-  (setq chatgpt--last-query query))
+  (setq chatgpt--last-query query)
+  (setq chatgpt--last-query-unsaved t))
 
 ;; (chatgpt--extract-reply)
 (defun chatgpt--extract-raw-reply ()
@@ -138,14 +139,18 @@
 ;; (chatgpt--save-reply)
 (defun chatgpt--save-reply ()
   (interactive)
-  (let* ((save-silently t)
-         (base (format-time-string "%Y%m%d-%H%M%S"))
-	 (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt-engine base)))
-    (with-temp-buffer
-      (insert "\n** ")
-      (chatgpt-insert-reply '(4))
-      (write-region (point-min) (point-max) file 'append))))
+  (if (and chatgpt--last-query 
+	   chatgpt--last-query-unsaved)
+    (let* ((save-silently t)
+           (base (format-time-string "%Y%m%d"))
+	   (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt-engine base)))
+      (with-temp-buffer
+	(insert "\n** ")
+	(chatgpt-insert-reply '(4))
+	(write-region (point-min) (point-max) file 'append)))
+    (setq chatgpt--last-query-unsaved nil)))
 
+
 ;; ---------------- Reply monitor.
 ;; (chatgpt--start-monitor)
 (defun chatgpt--start-monitor ()
@@ -179,6 +184,33 @@
 					    chatgpt-prog "-e" chatgpt-engine "-r"))
       (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))))
 
+(defun chatgpt--replace-regexp (regexp newtext)
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward regexp nil t)
+      (replace-match newtext))))
+
+(defun chatgpt--format-buffer ()
+  ;; Reformat list items.
+  (chatgpt--replace-regexp "\n\n\\( *[0-9-] .+?\\)$" "\n\\1")
+  ;; Remove emphasis.
+  (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1")
+  (chatgpt--replace-regexp "’" "'")
+  (chatgpt--replace-regexp "—" "---")
+  (chatgpt--replace-regexp "–" "-")
+  (chatgpt--replace-regexp "SVG Image\n" "")
+  )
+
+(defun chatgpt-extract-reply ()
+  (let ((reply (with-current-buffer chatgpt--buffer-name
+                (buffer-string))))
+    (with-temp-buffer
+      (insert reply)
+      (goto-char (point-min))
+      (while (re-search-forward "## .*\n" nil t)
+       (replace-match ""))
+      (buffer-string))))
+
 (defun chatgpt--process-sentinel (proc event)
   ;; Is process completed?
   (when (string-match-p "finished" event)
@@ -195,21 +227,26 @@
 	    (setq mode-name (format "%s replying" chatgpt-engine))
 	    (erase-buffer)
 	    (insert reply)
-	    (shr-render-region (point-min) (point-max)))
+	    (shr-render-region (point-min) (point-max))
+	    (chatgpt--format-buffer))
 	  ;; Restore the window start and position.
           (set-window-point win last-pnt)
           (set-window-start win last-start))
 	(setq chatgpt--last-raw-reply reply)
 	(setq chatgpt--timer-count 0)))
     ;; Schedule next event if it seems reply is in progress.
-    (if (< chatgpt--timer-count 10)
+    (if (< chatgpt--timer-count 50) ;; .2 seconds x 50 = 10 seconds.
 	;; Continue
 	(chatgpt--sched-timer-event)
       ;; Finished
-      (with-current-buffer chatgpt--buffer-name
-	(setq mode-name (format "%s finished" chatgpt-engine)))
-      (run-hooks 'chatgpt-query-complete-hooks))))
+      (chatgpt--query-finished))))
 
+(defun chatgpt--query-finished ()
+  (with-current-buffer chatgpt--buffer-name
+    (setq mode-name (format "%s finished" chatgpt-engine)))
+  (chatgpt--save-reply))
+  
+
 ;; ---------------- User-level interfaces.
 ;; (chatgpt-select-engine)
 (defun chatgpt-select-engine ()
@@ -254,5 +291,10 @@
       (insert "Q. " chatgpt--last-query "\n\n")
       (insert "A. "))
     (insert (string-trim (chatgpt--extract-reply)))))
+
+;; (chatgpt-restart-monitor)
+(defun chatgpt-restart-monitor ()
+  (interactive)
+  (chatgpt--start-monitor))
 
 (provide 'chatgpt)
