@@ -59,7 +59,7 @@
 (defvar chatgpt--last-query nil)
 (defvar chatgpt--last-query-beg nil)
 (defvar chatgpt--last-query-end nil)
-(defvar chatgpt--last-query-unsaved nil)
+(defvar chatgpt--last-query-saved nil)
 (defvar chatgpt--last-raw-reply nil)
 (defvar chatgpt--process nil)
 (defvar chatgpt--timer nil)
@@ -124,7 +124,7 @@
   (call-process chatgpt-prog nil chatgpt--buffer-name nil
 		"-e" chatgpt-engine "-s" query)
   (setq chatgpt--last-query query)
-  (setq chatgpt--last-query-unsaved t))
+  (setq chatgpt--last-query-saved nil))
 
 ;; (chatgpt--extract-reply)
 (defun chatgpt--extract-raw-reply ()
@@ -139,8 +139,8 @@
 ;; (chatgpt--save-reply)
 (defun chatgpt--save-reply ()
   (interactive)
-  (if (and chatgpt--last-query 
-	   chatgpt--last-query-unsaved)
+  (when (and chatgpt--last-query 
+	     (not chatgpt--last-query-saved))
     (let* ((save-silently t)
            (base (format-time-string "%Y%m%d"))
 	   (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt-engine base)))
@@ -148,7 +148,7 @@
 	(insert "\n** ")
 	(chatgpt-insert-reply '(4))
 	(write-region (point-min) (point-max) file 'append)))
-    (setq chatgpt--last-query-unsaved nil)))
+    (setq chatgpt--last-query-saved t)))
 
 
 ;; ---------------- Reply monitor.
