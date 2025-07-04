@@ -1,6 +1,6 @@
 ;; -*- Emacs-Lisp -*-
 ;;
-;; Interactively access generative AIs from Emacs without APIs.
+;; Interactively access generative AIs from Emacs with/without APIs.
 ;; Copyright (C) 2023-2025 Hiroyuki Ohsaki.
 ;; All rights reserved.
 ;;
@@ -18,12 +18,14 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-(defvar chatgpt-prog "~/src/chatgpt-el/chatgpt")
+(defvar chatgpt-prog-browser "~/src/chatgpt-el/chatgpt")
+(defvar chatgpt-prog "chat")
 (defvar chatgpt-engine "ChatGPT")
 (defvar chatgpt-engines-alist '((?1 . "ChatGPT")
 				(?2 . "Gemini")
 				(?3 . "Claude")
 				(?4 . "DeepSeek")))
+(defvar chatgpt-use-browser nil)
 
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -62,6 +64,7 @@
 (defvar chatgpt--last-query-saved nil)
 (defvar chatgpt--last-raw-reply nil)
 (defvar chatgpt--process nil)
+(defvar chatgpt--monitor-process nil)
 (defvar chatgpt--timer nil)
 (defvar chatgpt--timer-count nil)
 
@@ -74,7 +77,7 @@
   (make-local-variable 'font-lock-defaults)
   (setq font-lock-defaults '(chatgpt-font-lock-keywords 'keywords-only nil))
   (font-lock-mode 1))
-  
+
 
 ;; ---------------- Low level interfaces
 ;; (chatgpt--read-prefix)
@@ -120,21 +123,55 @@
 ;; (chatgpt--send-query "what is Emacs's interesting history?")
 (defun chatgpt--send-query (query)
   (chatgpt--save-reply)
+  (chatgpt--init-reply)
   (chatgpt--start-monitor)
-  (call-process chatgpt-prog nil chatgpt--buffer-name nil
-		"-e" chatgpt-engine "-s" query)
+  (let ((prog (if chatgpt-use-browser
+		  chatgpt-prog-browser
+		chatgpt-prog)))
+    (setq chatgpt--process (start-process "ChatGPT" chatgpt--buffer-name
+					  prog "-e" chatgpt-engine "-s" query)))
+  (set-process-filter chatgpt--process 'chatgpt--process-filter)
+  (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
   (setq chatgpt--last-query query)
   (setq chatgpt--last-query-saved nil))
 
+(defun chatgpt--process-filter (proc string)
+  (when (buffer-live-p (get-buffer chatgpt--buffer-name))
+    (with-current-buffer chatgpt--buffer-name
+      (goto-char (point-max))
+      (insert string)
+      (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1" 'bold)
+      (when (get-buffer-window chatgpt--buffer-name)
+        (with-selected-window (get-buffer-window chatgpt--buffer-name)
+          (goto-char (point-max)))))))
+
+(defun chatgpt--process-sentinel (proc event)
+  (when (string-match "finished" event)
+    (chatgpt--query-finished)))
+
+;; (chatgpt--init-reply)
+(defun chatgpt--init-reply ()
+  (interactive)
+  (let ((buf (get-buffer-create chatgpt--buffer-name)))
+    ;; Initialize the reply buffer.
+    (with-current-buffer buf
+      (erase-buffer)
+      (chatgpt-mode)
+      (setq mode-name (format "%s streaming" chatgpt-engine)))
+    ;; Display in the other window.
+    (delete-other-windows)
+    (split-window)
+    (set-window-buffer (next-window) buf)))
+
 ;; (chatgpt--extract-reply)
 (defun chatgpt--extract-raw-reply ()
-    (with-current-buffer chatgpt--raw-buffer-name
-      (buffer-string)))
+  (with-current-buffer chatgpt--raw-buffer-name
+    (buffer-string)))
 
 ;; (chatgpt--extract-reply)
 (defun chatgpt--extract-reply ()
-    (with-current-buffer chatgpt--buffer-name
-      (buffer-string)))
+  (with-current-buffer chatgpt--buffer-name
+    (buffer-string)))
 
 ;; (chatgpt--save-reply)
 (defun chatgpt--save-reply ()
@@ -155,18 +192,10 @@
 ;; (chatgpt--start-monitor)
 (defun chatgpt--start-monitor ()
   (interactive)
-  (let ((buf (get-buffer-create chatgpt--buffer-name)))
-    ;; Initialize the reply buffer.
-    (with-current-buffer buf
-      (chatgpt-mode)
-      (setq mode-name (format "%s waiting" chatgpt-engine)))
-    ;; Display in the other window.
-    (delete-other-windows)
-    (split-window)
-    (set-window-buffer (next-window) buf))
-  ;; Schedule the next timer event.
-  (setq chatgpt--timer-count 0)
-  (chatgpt--sched-timer-event))
+  (when chatgpt-use-browser
+    ;; Schedule the next timer event.
+    (setq chatgpt--timer-count 0)
+    (chatgpt--sched-timer-event)))
 
 ;; (chatgpt--sched-timer-event)
 (defun chatgpt--sched-timer-event ()
@@ -175,14 +204,14 @@
 ;; (chatgpt--timer-event)
 (defun chatgpt--timer-event ()
   ;; Stop the process if already running.
-  (if (memq chatgpt--process (process-list))
-      (kill-process chatgpt--process))
+  (if (memq chatgpt--monitor-process (process-list))
+      (kill-process chatgpt--monitor-process))
   (let ((buf (get-buffer-create chatgpt--raw-buffer-name)))
     (with-current-buffer buf
       (erase-buffer)
-      (setq chatgpt--process (start-process "chatgpt" buf 
-					    chatgpt-prog "-e" chatgpt-engine "-r"))
-      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))))
+      (setq chatgpt--monitor-process (start-process "chatgpt" buf 
+						    chatgpt-prog "-e" chatgpt-engine "-r"))
+      (set-process-sentinel chatgpt--monitor-process 'chatgpt--monitor-process-sentinel))))
 
 (defun chatgpt--replace-regexp (regexp newtext)
   (save-excursion
@@ -203,15 +232,15 @@
 
 (defun chatgpt-extract-reply ()
   (let ((reply (with-current-buffer chatgpt--buffer-name
-                (buffer-string))))
+                 (buffer-string))))
     (with-temp-buffer
       (insert reply)
       (goto-char (point-min))
       (while (re-search-forward "## .*\n" nil t)
-       (replace-match ""))
+	(replace-match ""))
       (buffer-string))))
 
-(defun chatgpt--process-sentinel (proc event)
+(defun chatgpt--monitor-process-sentinel (proc event)
   ;; Is process completed?
   (when (string-match-p "finished" event)
     (let* ((reply (chatgpt--extract-raw-reply)))
@@ -245,7 +274,7 @@
   (with-current-buffer chatgpt--buffer-name
     (setq mode-name (format "%s finished" chatgpt-engine)))
   (chatgpt--save-reply))
-  
+
 
 ;; ---------------- User-level interfaces.
 ;; (chatgpt-select-engine)
