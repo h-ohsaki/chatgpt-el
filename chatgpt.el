@@ -30,14 +30,11 @@
 
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
-    (?s . "Summarize the following in a plain Japanese:")
+    (?s . "Summarize the following in Japanese in a plain academic writing style:")
     (?j . "Translate the following in Japanese in a plain academic writing style:")
     (?e . "Translate the following in English in a plain academic writing style:")
-    (?p . "Proofread following text:")
-    (?P . "以下の文章の誤りを直して、変更点の一覧を出力して:")
-    (?r . "Rewrite the following in a plain academic writing style:")
-    (?R . "###以下の文章を、1章の内容に合うように修正して。用語を1章のものに統一して。論理がわかりづらい箇所は明快な論理に書き替えて。平易で学術的な表現の英語にして。LaTeXのコマンドはそのままにして。\citeの前の空白はすべて~に変更して。###")
-    (?d . "Write docstring for the following code:")))
+    (?p . "Proofread the following and provide a list of changes made in Markdown table:")
+    (?r . "Rewrite the following in a plain academic writing style:")))
 
 (defvar chatgpt-font-lock-keywords
   '(;; comment
@@ -87,7 +84,7 @@
 ;; (chatgpt--read-prefix)
 (defun chatgpt--read-prefix ()
   (let* ((ch (read-char
-	      "Prefix ([w]hat/[s]ummary/[j]a/[e]n/[p]roof/[P]roof/[r]ewrite/{R]ewrite/[d]oc): "))
+	      "Select [w]hat/[s]ummary/[j]a/[e]n/[p]roof/[r]ewrite: "))
 	 (elem (assoc ch chatgpt-prefix-alist))
 	 (prefix (cdr elem)))
     (if prefix
@@ -142,17 +139,14 @@
 (defun chatgpt--process-filter (proc string)
   (when (buffer-live-p (get-buffer chatgpt--buffer-name))
     (with-current-buffer chatgpt--buffer-name
-      (goto-char (point-max))
-      (insert string)
-      ;; Hide all emphasis tags.
-      (goto-char (point-min))
-      (while (re-search-forward "\\(\\*\\*\\).+?\\(\\*\\*\\)" nil t)
-        (put-text-property (match-beginning 1) (match-end 1) 'invisible t)
-        (put-text-property (match-beginning 2) (match-end 2) 'invisible t))
-      ;; (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1")
-      (when (get-buffer-window chatgpt--buffer-name)
-        (with-selected-window (get-buffer-window chatgpt--buffer-name)
-          (goto-char (point-max)))))))
+      (save-excursion
+	(goto-char (point-max))
+	(insert string)
+	;; Hide all emphasis tags.
+	(goto-char (point-min))
+	(while (re-search-forward "\\(\\*\\*\\).+?\\(\\*\\*\\)" nil t)
+          (put-text-property (match-beginning 1) (match-end 1) 'invisible t)
+          (put-text-property (match-beginning 2) (match-end 2) 'invisible t))))))
 
 (defun chatgpt--process-sentinel (proc event)
   (when (string-match "finished" event)
