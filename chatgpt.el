@@ -26,6 +26,7 @@
 				(?3 . "Claude")
 				(?4 . "DeepSeek")))
 (defvar chatgpt-use-browser nil)
+;; (defvar chatgpt-use-browser t)
 
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -40,10 +41,13 @@
 
 (defvar chatgpt-font-lock-keywords
   '(;; comment
-    ("^[#;%].+"  . font-lock-comment-face)
+    ("^[;%].+"  . font-lock-comment-face)
     ;; header
+    ("^#+.+"  . font-lock-function-name-face)
     ("^Q\\. .+" . font-lock-function-name-face)
     ("^\\S.+?[:：]$"  . font-lock-function-name-face)
+    ;; emphasis
+    ("\\*\\*[^*]+\\*\\*"  . font-lock-constant-face)
     ;; item
     ("^ *[0-9.]+ " . font-lock-type-face)
     ("^ *[*-] .*$" . font-lock-string-face)
@@ -140,7 +144,12 @@
     (with-current-buffer chatgpt--buffer-name
       (goto-char (point-max))
       (insert string)
-      (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1" 'bold)
+      ;; Hide all emphasis tags.
+      (goto-char (point-min))
+      (while (re-search-forward "\\(\\*\\*\\).+?\\(\\*\\*\\)" nil t)
+        (put-text-property (match-beginning 1) (match-end 1) 'invisible t)
+        (put-text-property (match-beginning 2) (match-end 2) 'invisible t))
+      ;; (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1")
       (when (get-buffer-window chatgpt--buffer-name)
         (with-selected-window (get-buffer-window chatgpt--buffer-name)
           (goto-char (point-max)))))))
@@ -210,7 +219,7 @@
     (with-current-buffer buf
       (erase-buffer)
       (setq chatgpt--monitor-process (start-process "chatgpt" buf 
-						    chatgpt-prog "-e" chatgpt-engine "-r"))
+						    chatgpt-prog-browser "-e" chatgpt-engine "-r"))
       (set-process-sentinel chatgpt--monitor-process 'chatgpt--monitor-process-sentinel))))
 
 (defun chatgpt--replace-regexp (regexp newtext)
