@@ -1,6 +1,6 @@
 ;; -*- Emacs-Lisp -*-
 ;;
-;; Interactively access generative AIs from Emacs with/without APIs.
+;; Interactively access AIs from Emacs without using APIs.
 ;; Copyright (C) 2023-2025 Hiroyuki Ohsaki.
 ;; All rights reserved.
 ;;
@@ -17,6 +17,20 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;; Add the follwoing lines to ~/.emacs:
+;; (autoload 'chatgpt-query "chatgpt" nil t)
+;; (autoload 'chatgpt-insert-reply "qutechat" nil t)
+;; (global-set-key "\C-cq" 'chatgpt-query)
+;; (global-set-key "\C-cQ" 'chatgpt-insert-reply)
+;;
+;; Usage:
+;; C-c q          Send a query near the point.
+;; C-u C-c q      After selecting a query prefix, send a query near the point.
+;; C-u C-u C-c q  After selecting the engine, send a query near the point.
+;; C-c Q          Insert the latest reply at the point.  
+;; C-u C-c Q      Insert the pair of the latest query and reply at the point.  
+;; C-u C-u C-c Q  Replace the query in the buffer with the latest reply.  
 
 (defvar chatgpt-prog-browser "~/src/chatgpt-el/chatgpt")
 (defvar chatgpt-prog "chat")
@@ -113,8 +127,8 @@
       (setq end-pos (point))))
     ;; Remove the preceeding Q.
     (setq query (replace-regexp-in-string "^Q\\. *" "" query))
-    (setq query (read-string (format "%s query: " chatgpt-engine)
-			     (concat prefix query)))
+    ;; (setq query (read-string (format "%s query: " chatgpt-engine)
+    ;; 			     (concat prefix query)))
     ;; Record the region used as the query.
     (setq chatgpt--last-query-beg beg-pos)
     (setq chatgpt--last-query-end end-pos)
@@ -230,8 +244,7 @@
   (chatgpt--replace-regexp "’" "'")
   (chatgpt--replace-regexp "—" "---")
   (chatgpt--replace-regexp "–" "-")
-  (chatgpt--replace-regexp "SVG Image\n" "")
-  )
+  (chatgpt--replace-regexp "SVG Image\n" ""))
 
 (defun chatgpt-extract-reply ()
   (let ((reply (with-current-buffer chatgpt--buffer-name
@@ -297,16 +310,8 @@
 	   (chatgpt-select-engine))
 	  (arg
 	   (setq prefix (chatgpt--read-prefix))))
-    (unless query
-      (setq query (chatgpt--read-query prefix)))
+    (setq query (chatgpt--read-query prefix))
     (chatgpt--send-query (concat prefix query))))
-
-;; (chatgpt-lookup "Emacs")
-(defun chatgpt-lookup (query)
-  (interactive
-   (list (read-string (format "%s lookup: " chatgpt-engine)
-		      (thing-at-point 'word))))
-  (chatgpt--send-query query))
 
 ;; (chatgpt-insert-reply nil)
 ;; (chatgpt-insert-reply t)
@@ -323,6 +328,17 @@
       (insert "Q. " chatgpt--last-query "\n\n")
       (insert "A. "))
     (insert (string-trim (chatgpt--extract-reply)))))
+
+;; (chatgpt-fill-at-point)
+(defun chatgpt-fill-at-point ()
+  (interactive)
+  (let* ((pnt (point))
+	 (buf (buffer-string))
+	 (prefix "Write sentence(s) or program at __FILL_THIS_PART__ in the following text or program.  Just write sentence(s) or program that fits in __FILL_THIS_PART__ without any unnecessary elements before or after: ")
+	 (query (concat (substring buf 0 (1- pnt))
+			"__FILL_THIS_PART__"
+			(substring buf (1- pnt)))))
+    (chatgpt--send-query (concat prefix query))))
 
 ;; (chatgpt-restart-monitor)
 (defun chatgpt-restart-monitor ()
