@@ -1,6 +1,6 @@
 # NAME
 
-chatgpt-el - interactively access AIs from Emacs without using APIs
+chatgpt-el - interactively access AIs (ChatGPT/Gemini/Claude/DeepSeek) from Emacs without using APIs
 
 ![video](screenshot/video.gif)
 
@@ -52,9 +52,12 @@ environment.
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
 (autoload 'chatgpt-query "chatgpt" nil t)
+(autoload 'chatgpt-fill-at-point "chatgpt" nil t)
 (autoload 'chatgpt-insert-reply "chatgpt" nil t)
 (global-set-key "\C-cq" 'chatgpt-query)
+(global-set-key "\C-cf" 'chatgpt-fill-at-point)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
+(setq chatgpt-engine "ChatGPT")
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt")
 EOF
 > mkdir -p ~/var/log/chatgpt
@@ -76,20 +79,21 @@ such as Puppeteer must be accessible from `chatgpt` program.
 
 3. In Emacs, move the point (i.e., the cursor in Emacs) at the end of the
    query text.  Alternatively, you can select the region containing the query
-   text.  Then, type `C-c q` or execute `M-x chatgpt-query`.  With a prefix
-   argument (e.g., `C-u C-c q`), you will be prompted what query prefix is
-   prepended to the query text.
+   text.  Then, type `C-c q` or execute `M-x chatgpt-query`.  With `C-u C-c
+   q`, you can revise the query in the minibuffer.  With `C-u C-u C-c q`, you
+   will be prompted what query prefix is prepended to the query text.
 
 4. The query is automatically submitted to the AI in your Chromium/Chrome.
    The reply from the AI will be displayed in another buffer in Emacs.
 
 5. Once the reply is displayed, type `C-c Q` or execute M-x
    chatgpt-insert-reply from Emacs.  The reply from the AI is inserted at the
-   current point.
+   current point.  Use `C-u C-c Q` to insert both the query text and the reply
+   from the AI.
 
 6. When requesting translation or proofreading of a text for the AI, it is
-   possible to replace the query text with the response from the Ait. To do
-   this, type `C-u C-u C-c Q`.
+   handy to replace the query text with the reply from the Ai. To do this,
+   type `C-u C-u C-c Q`.
 
 # TROUBLE SHOOTING
 
