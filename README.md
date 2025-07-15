@@ -1,13 +1,13 @@
 # NAME
 
-chatgpt-el - interactively access ChatGPT/Gemini/Claude/DeepSeek from Emacs without APIs
+chatgpt-el - interactively access AIs from Emacs without using APIs
 
 ![video](screenshot/video.gif)
 
 # DESCRIPTION
 
-**chatgpt-el** is an Emacs Lisp program designed to interactively access
-ChatGPT/Gemini/Claude/DeepSeek from within Emacs.  While those AIs can be
+**chatgpt-el** is an Emacs Lisp program designed to interactively access AIs
+(e.g., ChatGPT, Gemini and Claude) from within Emacs.  While those AIs can be
 accessed via API interfaces using a programming language like Python and
 several modules, such access has several drawbacks.
 
@@ -32,8 +32,8 @@ connection from the `chatgpt` script.
 ![overview](overview.png)
 
 Note that the implementation of the `chatgpt` script depends on the internal
-structure of the HTML file returned by the AI server. If `chatgpt` does not
-work in your environment, you may need to modify the program according to your
+structure of the HTML file returned by the AIs. If `chatgpt` does not work in
+your environment, you may need to modify the program according to your
 environment.
 
 # PREREQUISITES
@@ -87,12 +87,9 @@ such as Puppeteer must be accessible from `chatgpt` program.
    chatgpt-insert-reply from Emacs.  The reply from the AI is inserted at the
    current point.
 
-6. If there are further responses from the AI, type `C-u C-u C-c q` to display
-   the continuation of AI's response in the buffer of Emacs.
-   
-7. When requesting translation or proofreading of a text for the AI, it is
-   possible to replace the query text with the response from
-   ChatGPT/Gemini/Claude. To do this, type `C-u C-u C-c Q`.
+6. When requesting translation or proofreading of a text for the AI, it is
+   possible to replace the query text with the response from the Ait. To do
+   this, type `C-u C-u C-c Q`.
 
 # TROUBLE SHOOTING
 
