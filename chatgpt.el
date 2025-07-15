@@ -33,7 +33,7 @@
 ;; C-u C-u C-c Q  Replace the query in the buffer with the latest reply.  
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt")
-(defvar chatgpt-api-prog "chat")
+(defvar chatgpt-api-prog "~/src/chatgpt-el/chatgpt-api")
 (defvar chatgpt-engine "ChatGPT_API")
 (defvar chatgpt-engines-alist '((?0 . "ChatGPT_API")
 				(?1 . "ChatGPT")
@@ -301,12 +301,13 @@
 ;; (chatgpt-insert-reply)
 (defun chatgpt-insert-reply (arg)
   (interactive "P")
-  (let ((reply (string-trim (chatgpt--extract-reply))))
+  (let ((reply (string-trim (chatgpt--extract-reply)))
+	(beg (nth 0 chatgpt--last-query-pos))
+	(end (nth 1 chatgpt--last-query-pos)))
     (cond 
      ;; With C-u C-u prefix, replace the query with the reply.
      ((equal arg '(16))
-      (delete-region (nth 1 chatgpt--last-query-pos)
-		     (nth 2 chatgpt--last-query-pos))
+      (delete-region beg end)
       (insert reply))
      ;; With C-u, insert the query and the reply.
      (arg
