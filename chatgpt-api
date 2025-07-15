@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+#
+# 
+# Copyright (c) 2025, Hiroyuki Ohsaki.
+# All rights reserved.
+#
+# $Id: chat,v 1.10 2025/07/15 08:23:32 ohsaki Exp $
+#
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+import sys
+
+from openai import OpenAI
+from perlcompat import die, warn, getopts
+# import tbdump
+
+#                       Output/1M tokens
+# gpt-4o-mini  		$0.60
+# gpt-3.5-turbo		$1.50
+# gpt-4.1-mini 		$1.60
+# gpt-4o	 	$10.0
+# gpt-4-turbo  		$30.0
+
+INSTRUCTIONS = """\
+あなたは論理的で聡明なアドバイザです。
+「です・ます」を使わずに、
+絶対に「だ・である」で答えてください。
+専門用語には元となる英語を括弧書きで表記してください。
+Markdown 形式で答えてください。
+事実やエビデンスを重視して回答してください。
+もし可能であれば具体例や、
+余談、
+エピソードも混じえて答えてください。
+事実に関する質問に答える際、
+自身の知識だけで 100% の確信が持てない場合は、
+決して推測で答えないでください。
+代わりに「情報が確認できなかった」と答えてください。
+できるだけ詳しく、
+丁寧に説明してください。"""
+
+def usage():
+    die(f"""\
+usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s query]
+  -v         verbose mode
+  -c         compare mode (also diplay the reply from gpt-4.1-mini)
+  -e engine  specify AI engine (default: chatgpt)
+  -m model   specify LLM model (default: gpt-4o-mini)
+  -s query   query string
+""")
+
+def run_query(client, model, instructions, query, max_output_tokens=4096, temperature=0): 
+    print(f'[{model}]')
+    stream = client.responses.create(
+        model=model,
+        instructions=instructions,
+        input=query,
+        stream=True,
+        max_output_tokens=max_output_tokens,
+        temperature=temperature,
+    )
+    for event in stream:
+        try:
+            delta = event.delta
+            print(delta, end='', flush=True)
+        except AttributeError:
+            pass
+    print()
+
+def main():
+    opt = getopts('vce:m:s:') or usage()
+    verbose = opt.v
+    compare = opt.c
+    engine = opt.e or 'chatgpt'
+    model = opt.m or 'gpt-4o-mini'
+    query = opt.s
+
+    client = OpenAI()
+    run_query(client, model, INSTRUCTIONS, query)
+
+    if compare:
+        print('----------------------------------------------------------------')
+        run_query(client, 'gpt-4.1-mini', INSTRUCTIONS, query)
+        
+if __name__ == "__main__":
+    main()
