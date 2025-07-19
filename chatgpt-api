@@ -72,7 +72,7 @@ usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s query]
   -s query   query string
 """)
 
-def run_query(client, model, instructions, query, max_output_tokens=4096, temperature=0): 
+def run_query(client, model, instructions, query, max_output_tokens=8192, temperature=0): 
     print(f'[{model}]')
     stream = client.responses.create(
         model=model,
