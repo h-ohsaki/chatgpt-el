@@ -1,6 +1,6 @@
 ;; -*- Emacs-Lisp -*-
 ;;
-;; Interactively access AIs from Emacs without using APIs.
+;; Interactively access AIs from Emacs with/without APIs.
 ;; Copyright (C) 2023-2025 Hiroyuki Ohsaki.
 ;; All rights reserved.
 ;;
@@ -32,7 +32,7 @@
 ;; C-u C-u C-c q  Send a query near the point after selecting a query prefix.
 ;; C-c Q          Insert the latest reply at the point.  
 ;; C-u C-c Q      Insert the pair of the latest query and reply at the point.  
-;; C-u C-u C-c Q  Replace the query in the buffer with the latest reply.  
+;; C-c f          Generate a context that fits at the point.
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt")
 (defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
@@ -64,9 +64,10 @@
     ("\".+?\"" . font-lock-string-face)
     ("'.+?'" . font-lock-string-face)))
 
+;; FIXME: Allow multiple query instances.
 (defvar chatgpt--buffer-name "*ChatGPT reply*")
 (defvar chatgpt--raw-buffer-name "*ChatGPT raw*")
-
+;; FIXME: Use buffer-local variables.
 (defvar chatgpt--last-query nil)
 (defvar chatgpt--last-raw-reply nil)
 (defvar chatgpt--last-engine nil)
@@ -301,6 +302,8 @@
 (defun chatgpt-fill-at-point (&optional engine use-api)
   (interactive)
   (setq engine (or engine "ChatGPT"))
+  ;; FIXME: Do not force to use API.
+  (setq use-api t)
   (let* ((pnt (point))
 	 (buf (buffer-string))
 	 (prefix "Write sentence(s) or program at __FILL_THIS_PART__ in the following text or program.  Only write sentence(s) or program that fits in __FILL_THIS_PART__ without any unnecessary elements before or after: ")
