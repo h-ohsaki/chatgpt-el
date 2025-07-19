@@ -59,6 +59,7 @@ environment.
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
 (setq chatgpt-engine "ChatGPT")
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt")
+(setq chatgpt-api-prog "../path/to/chatgpt-el/chatgpt-api")
 EOF
 > mkdir -p ~/var/log/chatgpt
 ```
