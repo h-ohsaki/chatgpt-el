@@ -69,8 +69,8 @@
 (defvar chatgpt--raw-buffer-name "*ChatGPT raw*")
 ;; FIXME: Use buffer-local variables.
 (defvar chatgpt--last-query nil)
-(defvar chatgpt--last-raw-reply nil)
 (defvar chatgpt--last-engine nil)
+(defvar chatgpt--last-raw-reply nil)
 (defvar chatgpt--process nil)
 (defvar chatgpt--monitor-process nil)
 (defvar chatgpt--monitor-timer nil)
@@ -137,6 +137,9 @@
 (defun chatgpt--send-query (query &optional engine use-api)
   (chatgpt--init engine use-api)
   (chatgpt--start-monitor engine use-api)
+  ;; Stop the process if already running.
+  (if (memq chatgpt--process (process-list))
+      (kill-process chatgpt--process))
   (let ((prog (if use-api chatgpt-prog-api chatgpt-prog)))
     (setq chatgpt--process
 	  (start-process "ChatGPT" chatgpt--buffer-name
@@ -164,6 +167,12 @@
 ;; (chatgpt--init)
 (defun chatgpt--init (engine use-api)
   (interactive)
+  (when (and chatgpt--process
+	     (process-live-p chatgpt--process))
+    (kill-process chatgpt--process))
+  (when (and chatgpt--monitor-process
+	     (process-live-p chatgpt--monitor-process))
+    (kill-process chatgpt--monitor-process))
   (let ((buf (get-buffer-create chatgpt--buffer-name)))
     ;; Initialize the reply buffer.
     (with-current-buffer buf
@@ -202,12 +211,16 @@
 ;; ---------------- Reply monitor.
 ;; (chatgpt--start-monitor)
 (defun chatgpt--start-monitor (engine use-api)
-  (when chatgpt--monitor-timer
-    (cancel-timer chatgpt--monitor-timer))
   (when (not use-api)
     ;; Schedule the next timer event.
     (setq chatgpt--monitor-count 0)
     (chatgpt--sched-monitor-event engine)))
+
+(defun chatgpt--stop-monitor ()
+  (when (and chatgpt--monitor-timer
+	     (timerp chatgpt--monitor-timer))
+    (cancel-timer chatgpt--monitor-timer)
+    (setq chatgpt--monitor-timer nil)))
 
 ;; (chatgpt--sched-monitor-event)
 (defun chatgpt--sched-monitor-event (engine)
@@ -216,9 +229,6 @@
 
 ;; (chatgpt--monitor-event)
 (defun chatgpt--monitor-event (engine)
-  ;; Stop the process if already running.
-  (if (memq chatgpt--monitor-process (process-list))
-      (kill-process chatgpt--monitor-process))
   (let ((buf (get-buffer-create chatgpt--raw-buffer-name)))
     (with-current-buffer buf
       (erase-buffer)
@@ -261,7 +271,7 @@
 	(setq chatgpt--last-raw-reply reply)
 	(setq chatgpt--monitor-count 0)))
     ;; Schedule next event if it seems reply is in progress.
-    (if (< chatgpt--monitor-count 50) ;; .2 seconds x 25 = 5 seconds.
+    (if (< chatgpt--monitor-count 25) ;; .2 seconds x 25 = 5 seconds.
 	;; Continue
 	(chatgpt--sched-monitor-event chatgpt--last-engine)
       ;; Finished
