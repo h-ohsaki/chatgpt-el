@@ -21,13 +21,15 @@
 ;; Add the follwoing lines to ~/.emacs:
 ;; (autoload 'chatgpt-query "chatgpt" nil t)
 ;; (autoload 'chatgpt-insert-reply "qutechat" nil t)
+;; (autoload 'chatgpt-fill-at-point "chatgpt" nil t)
 ;; (global-set-key "\C-cq" 'chatgpt-query)
 ;; (global-set-key "\C-cQ" 'chatgpt-insert-reply)
+;; (global-set-key "\C-cf" 'chatgpt-fill-at-point)
 ;;
 ;; Usage:
 ;; C-c q          Send a query near the point.
-;; C-u C-c q      After selecting a query prefix, send a query near the point.
-;; C-u C-u C-c q  After selecting the engine, send a query near the point.
+;; C-u C-c q      Send a query near the point after revising the query in the minibuffer.
+;; C-u C-u C-c q  Send a query near the point after selecting a query prefix.
 ;; C-c Q          Insert the latest reply at the point.  
 ;; C-u C-c Q      Insert the pair of the latest query and reply at the point.  
 ;; C-u C-u C-c Q  Replace the query in the buffer with the latest reply.  
@@ -89,7 +91,8 @@
   ;; Local variables.
   (make-local-variable 'font-lock-defaults)
   (setq font-lock-defaults '(chatgpt-font-lock-keywords 'keywords-only nil))
-  (font-lock-mode 1))
+  (font-lock-mode 1)
+  (auto-fill-mode 1))
 
 (defun chatgpt--replace-regexp (regexp newtext)
   (save-excursion
