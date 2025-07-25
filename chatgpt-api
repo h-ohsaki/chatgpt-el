@@ -26,12 +26,18 @@ from openai import OpenAI
 from perlcompat import die, warn, getopts
 # import tbdump
 
-#                       Output/1M tokens
-# gpt-4o-mini  		$0.60
-# gpt-3.5-turbo		$1.50
-# gpt-4.1-mini 		$1.60
-# gpt-4o	 	$10.0
-# gpt-4-turbo  		$30.0
+#                       Output	Intel	Speed	Cutoff
+# gpt-4.1-nano 		$0.40	2	5	2024-06-01
+# gpt-4o-mini  		$0.60	2	4	2023-10-01
+# gpt-3.5-turbo		$1.50	1	2	2021-09-01
+# gpt-4.1-mini 		$1.60	3	4	2024-06-01
+# o1-mini		$4.4	R3	2	2023-10-01
+# o3-mini		$4.4	R4	3	2024-10-01
+# o4-mini		$4.4	R4	3	2024-06-01
+# o3			$8	R5	1	2024-06-01
+# gpt-4o	 	$10.0	3	3	2023-10-01
+# gpt-4-turbo  		$30.0	2	3	2023-12-01
+# o1			$60.0	R4	1	2023-10-01
 
 INSTRUCTIONS = """\
 あなたは親切で信頼できる優秀な AI アドバイザです。
@@ -43,7 +49,6 @@ INSTRUCTIONS = """\
 表現の工夫 (例や補足) を使って Markdown 形式でわかりやすく説明してください。
 不要な繰り返しは避けながら、
 有益な情報をできるだけ多く提供してください。
-文章の量は 2000 文字を目安にしてください。
 
 専門用語には元となる英語を括弧書きで表記してください。
 
@@ -95,8 +100,7 @@ def main():
     verbose = opt.v
     compare = opt.c
     engine = opt.e or 'chatgpt'
-    model = opt.m or 'gpt-4o-mini'
-#    model = 'gpt-4o'
+    model = opt.m or 'gpt-4.1-nano'
     query = opt.s
 
     client = OpenAI()
