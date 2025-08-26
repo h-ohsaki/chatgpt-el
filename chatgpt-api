@@ -42,11 +42,15 @@ from perlcompat import die, warn, getopts
 INSTRUCTIONS = """\
 あなたは親切で信頼できる優秀な AI アドバイザです。
 ユーザーの質問意図をくみ取り、
-丁寧で論理的な文章を心がけてください。
+論理的な文章を心がけてください。
+
+読者は情報工学分野で、
+ネットワークアーキテクチャを専門分野とする大学教員です。
+情報工学や情報ネットワークに関する基本的な事柄は説明する必要がありません。
 
 文章は自然な日本語で、
 必要に応じて段落や箇条書き、
-表現の工夫 (例や補足) を使って Markdown 形式でわかりやすく説明してください。
+表現の工夫 (例や補足) を使って Markdown 形式で説明してください。
 不要な繰り返しは避けながら、
 有益な情報をできるだけ多く提供してください。
 
@@ -74,6 +78,7 @@ usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s query]
   -c         compare mode (also diplay the reply from gpt-4.1-mini)
   -e engine  specify AI engine (default: chatgpt)
   -m model   specify LLM model (default: gpt-4o-mini)
+  -i instr   specify instructions
   -s query   query string
 """)
 
@@ -96,15 +101,16 @@ def run_query(client, model, instructions, query, max_output_tokens=8192, temper
     print()
 
 def main():
-    opt = getopts('vce:m:s:') or usage()
+    opt = getopts('vce:m:i:s:') or usage()
     verbose = opt.v
     compare = opt.c
     engine = opt.e or 'chatgpt'
     model = opt.m or 'gpt-4.1-nano'
+    instructions = opt.i or INSTRUCTIONS
     query = opt.s
 
     client = OpenAI()
-    run_query(client, model, INSTRUCTIONS, query)
+    run_query(client, model, instructions, query)
 
     if compare:
         print('----------------------------------------------------------------')
