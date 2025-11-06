@@ -154,6 +154,12 @@
   ;; Stop the process if already running.
   (when (memq chatgpt--process (process-list))
     (kill-process chatgpt--process))
+  ;; Start Chromium if not running.
+  (unless use-api
+    (let ((pid (string-trim (shell-command-to-string "pidof chromium"))))
+      (when (string-empty-p pid)
+        (start-process "chromium" nil "chromium" "--remote-debugging-port=9000")
+	(sleep-for 3.))))
   (let ((prog (if use-api chatgpt-prog-api chatgpt-prog)))
     (setq chatgpt--process
 	  (start-process "ChatGPT" chatgpt--buffer-name
@@ -333,14 +339,21 @@
   (setq use-api t)
   (let* ((pnt (point))
 	 (buf (buffer-string))
-	 (prefix "Write sentence(s) or program at __FILL_THIS_PART__ in the following text or program.  Only write sentence(s) or program that fits in __FILL_THIS_PART__ without any unnecessary elements before or after: ")
+	 (prefix "Write sentences/program that fits in __FILL_THIS_PART__ in the text after ----.
+If the text is in RFC 822 format email, write five sentences corresponding to the previous message.
+Every line of the previous message is marked with '> '.
+Do not output anything except the sentences/program that fits in __FILL_THIS_PART__.
+Do not add '> ' at the beginning of lines.
+
+----
+")
 	 (query (concat (substring buf 0 (1- pnt))
 			"__FILL_THIS_PART__"
 			(substring buf (1- pnt)))))
     (chatgpt--send-query (concat prefix query) engine use-api)))
 
-(defun chatgpt-fill-api (arg &optional engine)
+(defun chatgpt-fill-api (&optional engine)
   (interactive)
-  (chatgpt-fill arg engine t))
+  (chatgpt-fill engine t))
 
 (provide 'chatgpt)
