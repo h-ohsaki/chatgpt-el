@@ -22,8 +22,7 @@ const CONFIGS = {
         page_url: 'https://chatgpt.com/',
         form_selector: 'div#prompt-textarea',
         button_selector: 'button#composer-submit-button',
-        // reply_selector: 'div[data-message-author-role="assistant"]',
-        reply_selector: 'article',
+        reply_selector: 'article > h6 + div',
         reply_per_query: 1
     },
     gemini: {
