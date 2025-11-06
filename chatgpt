@@ -20,9 +20,10 @@ const CONFIGS = {
     chatgpt: {
         engine: 'ChatGPT',
         page_url: 'https://chatgpt.com/',
-        form_selector: 'p.placeholder',
-        button_selector: 'button[aria-label="Send prompt"]',
-        reply_selector: 'div[data-message-author-role="assistant"]',
+        form_selector: 'div#prompt-textarea',
+        button_selector: 'button#composer-submit-button',
+        // reply_selector: 'div[data-message-author-role="assistant"]',
+        reply_selector: 'article',
         reply_per_query: 1
     },
     gemini: {
@@ -67,6 +68,16 @@ async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function quote_html(str) {
+    str = str.replace(/&/g, "&amp;")
+	.replace(/</g, "&lt;")
+	.replace(/>/g, "&gt;")
+	.replace(/"/g, "&quot;")
+	.replace(/'/g, "&#39;");
+    str = str.replace(/\n/g, '</p><p>');
+    return '<p>' + str + '</p>';
+}
+
 async function connect_to_browser() {
     let browser;
     try {
@@ -106,7 +117,8 @@ async function send_query(config, page, query) {
     if (config.form_selector.startsWith('textarea')) {
 	await page.type(config.form_selector, query);
     } else {
-	await page.$eval(config.form_selector, (el, str) => el.innerText = str, query);
+	let quoted_query = quote_html(query);
+	await page.$eval(config.form_selector, (el, str) => el.innerHTML = str, quoted_query);
     }
     // Press the submit button.
     if (config.button_selector == 'press_enter') {
