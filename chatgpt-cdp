@@ -7,17 +7,11 @@
 # $Id: $
 #
 
-import collections
-import fileinput
 import os
-import os.path
-import re
-import subprocess
 import sys
 import time
-
+import itertools
 import json
-import urllib.parse
 import requests
 import websocket
 
@@ -30,9 +24,13 @@ usage: {sys.argv[0]} [-v] [file...]
   -v    verbose mode
 """)
 
-def cdb_send(ws, id_, method, params=None):
+id_counter = itertools.count(1)
+
+def cdb_send(ws, method, params=None):
+    id_ = next(id_counter)
     req = {'id': id_, 'method': method}
-    req['params'] = params
+    if params:
+        req['params'] = params
     ws.send(json.dumps(req))
     ws.settimeout(5)
     while True:
@@ -40,59 +38,79 @@ def cdb_send(ws, id_, method, params=None):
         if resp.get('id') == id_:
             return resp
 
-def main():
-    opt = getopts('v') or usage()
-    verbose = opt.v
-
-    r = requests.get('http://127.0.0.1:9000/json/list', timeout=5)
-    pages = [elem for elem in r.json() if elem.get('type') == 'page']
+def send_query(query):
+    # Identify the first page.
+    req = requests.get('http://127.0.0.1:9000/json/list', timeout=5)
+    pages = [elem for elem in req.json() if elem.get('type') == 'page']
     page = pages[0]
     url = page.get('webSocketDebuggerUrl')
 
+    # Create a WebScoket connection to the browser.
     ws = websocket.create_connection(url)
-    cdb_send(ws, 1, 'Page.enable')
-    cdb_send(ws, 2, 'Page.navigate', {'url': 'https://chatgpt.com'})
+    # cdb_send(ws, 'Page.enable')
 
-    # ページ全体の HTML を取得する
-    time.sleep(1)
-    resp = cdb_send(ws, 3, 'Runtime.evaluate',
-                    {'expression': 'document.documentElement.outerHTML'})
-    html = resp['result']['result']['value']
+    # If not visiting chatgpt.com, visit the page first.
+    if 'https://chatgpt.com' not in page.get('url'):
+        cdb_send(ws, 'Page.navigate', {'url': 'https://chatgpt.com'})
+        time.sleep(1)
 
-    # div#prompt-textarea の innerHTML を foo に置換する
-    time.sleep(1)
-    resp = cdb_send(
-        ws, 4, 'Runtime.evaluate', {
-            'expression':
-            "document.querySelector('div#prompt-textarea').innerHTML = 'foo';"
-        })
-    html_after = resp['result']['result']['value']
+    # Fill the textare with the query.
+    js = f"document.querySelector('div#prompt-textarea').innerHTML = '{query}';"
+    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
 
-    # button#composer-submit-button[data-testid="send-button"] をクリックする
-    resp = cdb_send(
-        ws, 5, 'Runtime.evaluate', {
-            'expression':
-            "document.querySelector('button#composer-submit-button[data-testid=\"send-button\"]').click();"
-        })
+    # Click the submit button.
+    js = "document.querySelector('button#composer-submit-button[data-testid=\"send-button\"]').click();"
+    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
 
-    raise
-    # 3 番目の a タグをクリックする
-    resp = cdb_send(
-        ws, 5, 'Runtime.evaluate', {
-            'expression':
-            """
-    (() => {
-        const links = document.querySelectorAll('a');
-        if (links.length >= 3) {
-            links[2].click();
-            return true;
-        }
-        return false;
+def recv_query():
+    # Identify the first page.
+    req = requests.get('http://127.0.0.1:9000/json/list', timeout=5)
+    pages = [elem for elem in req.json() if elem.get('type') == 'page']
+    page = pages[0]
+    url = page.get('webSocketDebuggerUrl')
+
+    # Create a WebScoket connection to the browser.
+    ws = websocket.create_connection(url)
+
+    # Wait until ''article > h6 + div' is visible.
+    while True:
+        js = """
+    (function() {
+        const el = document.querySelector('article > h6 + div');
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        return (style && style.display !== 'none' && style.visibility !== 'hidden' && el.innerHTML.trim().length > 0);
     })()
     """
-        })
+        resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+        if resp['result']['result']['value']:
+            break
+        time.sleep(0.5)
 
-    raise
+    # Dump the inner-html of the last 'article > h6 + div'
+    # js = "document.querySelector('article > h6 + div').innerHTML"
+    js = "Array.from(document.querySelectorAll('article > h6 + div')).slice(-1)[0].innerHTML"
+    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+    content = resp['result']['result']['value']
+    print(content)
+
+def main():
+    opt = getopts('e:s:r') or usage()
+    if opt.s:
+        query = opt.s
+        send_query(query)
+    if opt.r:
+        time.sleep(1)
+        print(recv_query())
 
 if __name__ == "__main__":
     main()
+"""
+    # ページ全体の HTML を取得する
+    resp = cdb_send(ws, 'Runtime.evaluate',
+                    {'expression': 'document.documentElement.outerHTML'})
+    html = resp['result']['result']['value']
+    time.sleep(1)
+    html_after = resp['result']['result']['value']
+
+"""
