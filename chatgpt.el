@@ -150,6 +150,7 @@
 (defun chatgpt--send-query (query &optional engine use-api)
   "Send QUERY to the engine specified by ENGINE, using API if USE-API is non-nil."
   (chatgpt--init engine use-api)
+  (chatgpt--stop-monitor)
   (chatgpt--start-monitor engine use-api)
   ;; Stop the process if already running.
   (when (memq chatgpt--process (process-list))
