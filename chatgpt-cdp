@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+#
+#
+# Copyright (c) 2025, Hiroyuki Ohsaki.
+# All rights reserved.
+#
+# $Id: $
+#
+
+import collections
+import fileinput
+import os
+import os.path
+import re
+import subprocess
+import sys
+import time
+
+import json
+import urllib.parse
+import requests
+import websocket
+
+from perlcompat import die, warn, getopts
+import tbdump
+
+def usage():
+    die(f"""\
+usage: {sys.argv[0]} [-v] [file...]
+  -v    verbose mode
+""")
+
+def cdb_send(ws, id_, method, params=None):
+    req = {'id': id_, 'method': method}
+    req['params'] = params
+    ws.send(json.dumps(req))
+    ws.settimeout(5)
+    while True:
+        resp = json.loads(ws.recv())
+        if resp.get('id') == id_:
+            return resp
+
+def main():
+    opt = getopts('v') or usage()
+    verbose = opt.v
+
+    r = requests.get('http://127.0.0.1:9000/json/list', timeout=5)
+    pages = [elem for elem in r.json() if elem.get('type') == 'page']
+    page = pages[0]
+    url = page.get('webSocketDebuggerUrl')
+
+    ws = websocket.create_connection(url)
+    cdb_send(ws, 1, 'Page.enable')
+    cdb_send(ws, 2, 'Page.navigate', {'url': 'https://chatgpt.com'})
+
+    # ページ全体の HTML を取得する
+    time.sleep(1)
+    resp = cdb_send(ws, 3, 'Runtime.evaluate',
+                    {'expression': 'document.documentElement.outerHTML'})
+    html = resp['result']['result']['value']
+
+    # div#prompt-textarea の innerHTML を foo に置換する
+    time.sleep(1)
+    resp = cdb_send(
+        ws, 4, 'Runtime.evaluate', {
+            'expression':
+            "document.querySelector('div#prompt-textarea').innerHTML = 'foo';"
+        })
+    html_after = resp['result']['result']['value']
+
+    # button#composer-submit-button[data-testid="send-button"] をクリックする
+    resp = cdb_send(
+        ws, 5, 'Runtime.evaluate', {
+            'expression':
+            "document.querySelector('button#composer-submit-button[data-testid=\"send-button\"]').click();"
+        })
+
+    raise
+    # 3 番目の a タグをクリックする
+    resp = cdb_send(
+        ws, 5, 'Runtime.evaluate', {
+            'expression':
+            """
+    (() => {
+        const links = document.querySelectorAll('a');
+        if (links.length >= 3) {
+            links[2].click();
+            return true;
+        }
+        return false;
+    })()
+    """
+        })
+
+    raise
+
+if __name__ == "__main__":
+    main()
