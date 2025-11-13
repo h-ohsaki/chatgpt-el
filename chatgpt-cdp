@@ -7,7 +7,6 @@
 # $Id: $
 #
 
-import os
 import sys
 import time
 import itertools
@@ -18,10 +17,18 @@ import websocket
 from perlcompat import die, warn, getopts
 import tbdump
 
+DEFAULT_TIMEOUT = 5
+
+PAGE_URL = 'https://chatgpt.com'
+# NOTE: Selector must not contain a single quote (').
+FORM_SELECTOR = 'div#prompt-textarea'
+BUTTON_SELECTOR = 'button#composer-submit-button[data-testid="send-button"]'
+REPLY_SELECTOR = 'article > h6 + div'
+
 def usage():
     die(f"""\
-usage: {sys.argv[0]} [-v] [file...]
-  -v    verbose mode
+usage: {sys.argv[0]} [-e engine] [-s query] [-r]
+  -e engine  AI eingine (default: ChatGPT)
 """)
 
 id_counter = itertools.count(1)
@@ -32,64 +39,62 @@ def cdb_send(ws, method, params=None):
     if params:
         req['params'] = params
     ws.send(json.dumps(req))
-    ws.settimeout(5)
+    ws.settimeout(DEFAULT_TIMEOUT)
     while True:
         resp = json.loads(ws.recv())
         if resp.get('id') == id_:
             return resp
 
-def send_query(query):
-    # Identify the first page.
-    req = requests.get('http://127.0.0.1:9000/json/list', timeout=5)
-    pages = [elem for elem in req.json() if elem.get('type') == 'page']
-    page = pages[0]
-    url = page.get('webSocketDebuggerUrl')
-
-    # Create a WebScoket connection to the browser.
-    ws = websocket.create_connection(url)
-    # cdb_send(ws, 'Page.enable')
-
-    # If not visiting chatgpt.com, visit the page first.
-    if 'https://chatgpt.com' not in page.get('url'):
-        cdb_send(ws, 'Page.navigate', {'url': 'https://chatgpt.com'})
-        time.sleep(1)
-
-    # Fill the textare with the query.
-    js = f"document.querySelector('div#prompt-textarea').innerHTML = '{query}';"
-    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
-
-    # Click the submit button.
-    js = "document.querySelector('button#composer-submit-button[data-testid=\"send-button\"]').click();"
-    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
-
-def recv_query():
-    # Identify the first page.
-    req = requests.get('http://127.0.0.1:9000/json/list', timeout=5)
-    pages = [elem for elem in req.json() if elem.get('type') == 'page']
-    page = pages[0]
-    url = page.get('webSocketDebuggerUrl')
-
-    # Create a WebScoket connection to the browser.
-    ws = websocket.create_connection(url)
-
-    # Wait until ''article > h6 + div' is visible.
+def wait_until_visible(ws, selector):
+    js = f"""
+(function() {{
+    const el = document.querySelector('{selector}');
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    return (style && style.display !== 'none' && style.visibility !== 'hidden' && el.innerHTML.trim().length > 0);
+}})()
+"""
     while True:
-        js = """
-    (function() {
-        const el = document.querySelector('article > h6 + div');
-        if (!el) return false;
-        const style = window.getComputedStyle(el);
-        return (style && style.display !== 'none' && style.visibility !== 'hidden' && el.innerHTML.trim().length > 0);
-    })()
-    """
         resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
         if resp['result']['result']['value']:
             break
-        time.sleep(0.5)
+        time.sleep(1)
 
-    # Dump the inner-html of the last 'article > h6 + div'
-    # js = "document.querySelector('article > h6 + div').innerHTML"
-    js = "Array.from(document.querySelectorAll('article > h6 + div')).slice(-1)[0].innerHTML"
+def open_wsocket():
+    # Identify the first page.
+    resp = requests.get('http://127.0.0.1:9000/json/list',
+                        timeout=DEFAULT_TIMEOUT)
+    pages = [elem for elem in resp.json() if elem['type'] == 'page']
+    page = pages[0]
+
+    # Create a WebScoket connection to the page.
+    url = page.get('webSocketDebuggerUrl')
+    ws = websocket.create_connection(url)
+    cdb_send(ws, 'Page.enable')
+    if PAGE_URL not in page.get('url'):
+        cdb_send(ws, 'Page.navigate', {'url': 'https://chatgpt.com'})
+    return ws
+
+def send_query(query):
+    ws = open_wsocket()
+
+    # Fill the textare with the query.
+    wait_until_visible(ws, FORM_SELECTOR)
+    query = query.replace('\n', '\\n')
+    js = f"document.querySelector('{FORM_SELECTOR}').innerHTML = '{query}';"
+    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+
+    # Click the submit button.
+    wait_until_visible(ws, BUTTON_SELECTOR)
+    js = f"document.querySelector('{BUTTON_SELECTOR}').click();"
+    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+
+def recv_query():
+    ws = open_wsocket()
+
+    # Dump the inner-html of the last reply.
+    wait_until_visible(ws, REPLY_SELECTOR)
+    js = f"Array.from(document.querySelectorAll('{REPLY_SELECTOR}')).slice(-1)[0].innerHTML"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
     content = resp['result']['result']['value']
     print(content)
@@ -105,12 +110,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-"""
-    # ページ全体の HTML を取得する
-    resp = cdb_send(ws, 'Runtime.evaluate',
-                    {'expression': 'document.documentElement.outerHTML'})
-    html = resp['result']['result']['value']
-    time.sleep(1)
-    html_after = resp['result']['result']['value']
-
-"""
