@@ -105,7 +105,7 @@ def main():
     verbose = opt.v
     compare = opt.c
     engine = opt.e or 'chatgpt'
-    model = opt.m or 'gpt-4.1-nano'
+    model = opt.m or 'gpt-4.1-mini'
     instructions = opt.i or INSTRUCTIONS
     query = opt.s
 
