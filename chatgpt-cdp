@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
 #
-#
+# Remotely control AIs (ChatGPT/Gemini/Claude/DeepSeek) via Chrome/Chromium using CDP protocol
 # Copyright (c) 2025, Hiroyuki Ohsaki.
 # All rights reserved.
 #
-# $Id: $
-#
 
-import sys
-import time
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import itertools
 import json
 import requests
-import websocket
+import sys
+import time
 
 from perlcompat import die, warn, getopts
 import tbdump
+import websocket
 
 DEFAULT_TIMEOUT = 5
 
@@ -27,11 +38,24 @@ REPLY_SELECTOR = 'article > h6 + div'
 
 def usage():
     die(f"""\
-usage: {sys.argv[0]} [-e engine] [-s query] [-r]
+usage: {sys.argv[0]} [-e engine] [-i] [-s query] [-r]
   -e engine  AI eingine (default: ChatGPT)
 """)
 
 id_counter = itertools.count(1)
+
+def quote_html(s):
+    map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '\"': '&quot;',
+        "\'": '&#39;',
+        '\n' : '</p><p>',
+    }
+    for c, astr in map.items():
+        s = s.replace(c, astr)
+    return '<p>' + s + '</p>'
 
 def cdb_send(ws, method, params=None):
     id_ = next(id_counter)
@@ -81,7 +105,8 @@ def send_query(query):
     # Fill the textare with the query.
     wait_until_visible(ws, FORM_SELECTOR)
     query = query.replace('\n', '\\n')
-    js = f"document.querySelector('{FORM_SELECTOR}').innerHTML = '{query}';"
+    quoted_query = quote_html(query)
+    js = f"document.querySelector('{FORM_SELECTOR}').innerHTML = '{quoted_query}';"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
 
     # Click the submit button.
@@ -100,7 +125,13 @@ def recv_query():
     print(content)
 
 def main():
-    opt = getopts('e:s:r') or usage()
+    opt = getopts('e:is:r') or usage()
+    engine = opt.e if opt.e else 'chatgpt'
+    engine = engine.lower()
+    if engine != 'chatgpt':
+        raise NotImplementedError
+    if opt.i:
+        ws = open_wsocket()
     if opt.s:
         query = opt.s
         send_query(query)
