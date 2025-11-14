@@ -1,6 +1,6 @@
 # NAME
 
-chatgpt-el - interactively access AIs (ChatGPT/Gemini/Claude/DeepSeek) from Emacs without using APIs
+chatgpt-el - interactively access AIs (ChatGPT/Gemini/Claude/DeepSeek) from Emacs
 
 ![video](screenshot/video.gif)
 
@@ -12,11 +12,11 @@ accessed via API interfaces using a programming language like Python and
 several modules, such access has several drawbacks.
 
 1. Batch processing through APIs is slow; accessing APIs is slow, and
-   responses can often take an unnecessarily long time. Such slow response
+   responses can often take an unnecessarily long time.  Such slow response
    times can make accessing AIs frustrating.
 
 2. Accessing AIs via APIs sometimes requires a non-free AI account with credit
-   card registration. Frequent use of AIs can lead to high costs and require
+   card registration.  Frequent use of AIs can lead to high costs and require
    monitoring of AI billing records.
 
 **chatgpt-el** solves the above issues by enabling access to AIs within Emacs
@@ -24,55 +24,53 @@ without the use of an API key.  The program is implemented using
 Chromium/Chrome browser's CDP (Chrome DevTools Protocol)
 (https://chromedevtools.github.io/devtools-protocol/), and therefore requires
 a CDP-enabled Chromium/Chrome browser to be running.  **chatgpt-el** operates
-by remotely controlling your instance of Chromium/Chrome using the Node.js
-script called `chatgpt`, which is built on the Puppeteer library
-(https://pptr.dev/). Therefore, your Chromium/Chrome browser must accept a CDP
-connection from the `chatgpt` script.
+by remotely controlling your instance of Chromium/Chrome using the Python
+script called `chatgpt-cdp`, which is built on the websocket-client library
+(https://pypi.org/project/websocket-client/). Therefore, your Chromium/Chrome
+browser must accept a CDP connection from the `chatgpt-cdp` script.
 
 ![overview](overview.png)
 
-Note that the implementation of the `chatgpt` script depends on the internal
-structure of the HTML file returned by the AIs. If `chatgpt` does not work in
-your environment, you may need to modify the program according to your
-environment.
+Note that the implementation of the `chatgpt-cdp` script depends on the
+internal structure of the HTML file returned by the AIs. If `chatgpt-cdp` does
+not work in your environment, you may need to modify the program according to
+your environment.
 
 # PREREQUISITES
 
 - Chromium or Chrome browser (or other browsers supporting the CDP protocol).
-- Node.js (https://nodejs.org/en).
-- Puppeteer module (https://pptr.dev/)
+- Python
+- websocket-client module (https://pypi.org/project/websocket-client/)
 
 # INSTALLATION
 
 ``` sh
 > git clone https://github.com/h-ohsaki/chatgpt-el.git
 > cd chatgpt-el
-> npm i puppeteer-core
+> pip install websocket-client perlcompat tbdump
 > sudo install -m 644 chatgpt.el /usr/local/share/emacs/site-lisp
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
 (autoload 'chatgpt-query "chatgpt" nil t)
-(autoload 'chatgpt-fill-at-point "chatgpt" nil t)
 (autoload 'chatgpt-insert-reply "chatgpt" nil t)
-(global-set-key "\C-cq" 'chatgpt-query)
-(global-set-key "\C-cf" 'chatgpt-fill-at-point)
+(autoload 'chatgpt-fill-at-point "chatgpt" nil t)
+(global-set-key "\C-cb" 'chatgpt-query)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
+(global-set-key "\C-cf" 'chatgpt-fill-at-point)
 (setq chatgpt-engine "ChatGPT")
-(setq chatgpt-prog "../path/to/chatgpt-el/chatgpt")
-(setq chatgpt-api-prog "../path/to/chatgpt-el/chatgpt-api")
+(setq chatgpt-prog "../path/to/chatgpt-el/chatgpt-cdp")
 EOF
 > mkdir -p ~/var/log/chatgpt
 ```
 
-You can place `chatgpt` script anywhere in your system, but Node.js modules
-such as Puppeteer must be accessible from `chatgpt` program.
+You can place `chatgpt-cdp` script anywhere in your system.
 
 # USAGE
 
 1. Start Chromium/Chrome browser with remote debugging on port 9000.
 
 ``` sh
-> chromium --remote-debugging-port=9000
+> chromium --remote-debugging-port=9000 --remote-allow-origins=http://127.0.0.1:9000
 ```
 
 2. Visit ChatGPT/Gemini/Claude/DeepSeek in Chromium/Chrome, and login with
@@ -80,8 +78,8 @@ such as Puppeteer must be accessible from `chatgpt` program.
 
 3. In Emacs, move the point (i.e., the cursor in Emacs) at the end of the
    query text.  Alternatively, you can select the region containing the query
-   text.  Then, type `C-c q` or execute `M-x chatgpt-query`.  With `C-u C-c
-   q`, you can revise the query in the minibuffer.  With `C-u C-u C-c q`, you
+   text.  Then, type `C-c b` or execute `M-x chatgpt-query`.  With `C-u C-c
+   b`, you can revise the query in the minibuffer.  With `C-u C-u C-c q`, you
    will be prompted what query prefix is prepended to the query text.
 
 4. The query is automatically submitted to the AI in your Chromium/Chrome.
@@ -126,21 +124,21 @@ Content-Type:application/json; charset=UTF-8
 by running `chatgpt -i`.
 
 ``` sh
-> ./chatgpt -i
-> ./chatgpt -e gemini -i
-> ./chatgpt -e claude -i
-> ./chatgpt -e deepseek -i
+> ./chatgpt-cdp -i
+> ./chatgpt-cdp -e gemini -i
+> ./chatgpt-cdp -e claude -i
+> ./chatgpt-cdp -e deepseek -i
 ```
 
 3. Send a query (e.g., `hello`) to the AI.
 
 ``` sh
-> ./chatgpt -s hello
-> ./chatgpt -r
+> ./chatgpt-cdp -s hello
+> ./chatgpt-cdp -r
 <div class="flex w-full flex-col gap-1 empty:hidden first:pt-[3px]"><div class="markdown prose dark:prose-invert w-full break-words dark"><p data-start="0" data-end="37" data-is-last-node="" data-is-only-node="">Hello! 😊<br data-start="9" data-end="12">
 How can I help you today?</p></div></div>
-> ./chatgpt -e gemini -s hello
-> ./chatgpt -e gemini -r
+> ./chatgpt-cdp -e gemini -s hello
+> ./chatgpt-cdp -e gemini -r
 <div _ngcontent-ng-c3682768483="" class="markdown markdown-main-panel stronger enable-updated-hr-color" id="model-response-message-contentr_d1f3fd77a101a596" dir="ltr" style="--animation-duration: 600ms; --fade-animation-function: linear;"><p data-sourcepos="1:1-1:32">Hello! How can I help you today?</p></div>
 ```
 
