@@ -35,10 +35,8 @@
 ;; C-u C-c Q      Insert the pair of the latest query and reply at the point.  
 ;; C-c f          Generate a context that fits at the point.
 
-(defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp"
-  "Path to the chatgpt program.")
-(defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api"
-  "Path to the chatgpt-api program.")
+(defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp")
+(defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
 (defvar chatgpt-engine "ChatGPT")
 ;; (defvar chatgpt-engine "Gemini")
 (defvar chatgpt-prefix-alist
@@ -70,29 +68,19 @@
     ("【.+?】" . font-lock-constant-face)
     ("「.+?」" . font-lock-constant-face)
     ("\".+?\"" . font-lock-string-face)
-    ("'.+?'" . font-lock-string-face))
-  "Font lock keywords for ChatGPT mode.")
+    ("'.+?'" . font-lock-string-face)))
 
-(defvar chatgpt--buffer-name "*ChatGPT reply*"
-  "Name of the buffer for reply.")
-(defvar chatgpt--raw-buffer-name "*ChatGPT raw*"
-  "Name of the buffer for raw reply.")
-(defvar chatgpt--last-query nil
-  "The last query sent to the AI.")
-(defvar chatgpt--last-engine nil
-  "The last engine used for the query.")
-(defvar chatgpt--last-raw-reply nil
-  "The last raw reply received from the AI.")
-(defvar chatgpt--process nil
-  "The current query process.")
-(defvar chatgpt--monitor-process nil
-  "The current monitor process.")
-(defvar chatgpt--monitor-timer nil
-  "Timer for monitoring replies.")
-(defvar chatgpt--monitor-count nil
-  "Count of monitor events.")
+(defvar chatgpt--buffer-name "*ChatGPT reply*")
+(defvar chatgpt--raw-buffer-name "*ChatGPT raw*")
+(defvar chatgpt--last-query nil)
+(defvar chatgpt--last-engine nil)
+(defvar chatgpt--last-raw-reply nil)
+(defvar chatgpt--process nil)
+(defvar chatgpt--monitor-process nil)
+(defvar chatgpt--monitor-timer nil)
+(defvar chatgpt--monitor-ntries nil)
 
-;; ---------------- Utils.
+;; ---------------- Utils
 (defun chatgpt--update-mode-name (engine use-api status)
   "Update the mode name to reflect the current engine, API usage, and status."
   (setq mode-name (format "%s%s:%s" engine
@@ -161,14 +149,18 @@
   (unless use-api
     (let ((pid (string-trim (shell-command-to-string "pidof chromium"))))
       (when (string-empty-p pid)
-        (start-process "chromium" nil "chromium" "--remote-debugging-port=9000")
+        (start-process "chromium" nil "chromium"
+		       "--remote-debugging-port=9000"
+		       "--remote-allow-origins=http://127.0.0.1:9000")
 	(sleep-for 3.))))
   (let ((prog (if use-api chatgpt-prog-api chatgpt-prog)))
     (setq chatgpt--process
 	  (start-process "ChatGPT" chatgpt--buffer-name
 			 prog "-e" engine "-s" query)))
   (set-process-filter chatgpt--process 'chatgpt--process-filter)
-  (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
+  ;; Catch the end of reply with the sentinel in API mode.
+  (if use-api
+      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))
   (setq chatgpt--last-query query)
   (setq chatgpt--last-engine engine))
 
@@ -184,6 +176,7 @@
         (put-text-property (match-beginning 1) (match-end 1) 'invisible t)
         (put-text-property (match-beginning 2) (match-end 2) 'invisible t)))))
 
+;; This sentinel is used only in API mode.
 (defun chatgpt--process-sentinel (proc event)
   "Handle the completion EVENT of the process PROC."
   (when (string-match "finished" event)
@@ -237,7 +230,7 @@
   "Start monitoring replies for the specified ENGINE, using API if USE-API is non-nil."
   (when (not use-api)
     ;; Schedule the next timer event.
-    (setq chatgpt--monitor-count 0)
+    (setq chatgpt--monitor-ntries 0)
     (chatgpt--sched-monitor-event engine)))
 
 (defun chatgpt--stop-monitor ()
@@ -250,7 +243,7 @@
 (defun chatgpt--sched-monitor-event (engine)
   "Schedule a monitoring event for the specified ENGINE."
   (setq chatgpt--monitor-timer
-	(run-with-timer .2 nil 'chatgpt--monitor-event engine)))
+	(run-with-timer .5 nil 'chatgpt--monitor-event engine)))
 
 (defun chatgpt--monitor-event (engine)
   "Monitor the replies for the specified ENGINE."
@@ -279,13 +272,13 @@
     (let ((reply (chatgpt--extract-raw-reply)))
       (if (string= reply chatgpt--last-raw-reply)
 	  ;; No update.
-	  (setq chatgpt--monitor-count (1+ chatgpt--monitor-count))
+	  (setq chatgpt--monitor-ntries (1+ chatgpt--monitor-ntries))
 	;; Updated.
 	(let* ((win (get-buffer-window chatgpt--buffer-name))
                (last-pnt (window-point win))
                (last-start (window-start win)))
 	  (with-current-buffer chatgpt--buffer-name
-	    (chatgpt--update-mode-name chatgpt--last-engine nil "synching")
+	    (chatgpt--update-mode-name chatgpt--last-engine nil "streaming")
 	    (erase-buffer)
 	    (insert reply)
 	    (shr-render-region (point-min) (point-max))
@@ -294,12 +287,13 @@
           (set-window-point win last-pnt)
           (set-window-start win last-start))
 	(setq chatgpt--last-raw-reply reply)
-	(setq chatgpt--monitor-count 0)))
-    ;; Schedule next event if it seems reply is in progress.
-    (if (< chatgpt--monitor-count 25) ;; .2 seconds x 25 = 5 seconds.
-	(chatgpt--sched-monitor-event chatgpt--last-engine)
-      ;; Finished
-      (chatgpt--query-finished))))
+	(setq chatgpt--monitor-ntries 0))
+      (if (or (string-suffix-p "\nEOF\n" reply)
+	      (>= chatgpt--monitor-ntries 20)) ;; .5 seconds x 20 = 10 seconds.
+	  ;; Finished
+	  (chatgpt--query-finished)
+	;; Schedule the next event
+	(chatgpt--sched-monitor-event chatgpt--last-engine)))))
 
 (defun chatgpt--query-finished ()
   "Handle the completion of a query."
