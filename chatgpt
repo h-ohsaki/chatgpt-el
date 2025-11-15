@@ -21,9 +21,10 @@ const CONFIGS = {
         engine: 'ChatGPT',
         page_url: 'https://chatgpt.com/',
         form_selector: 'div#prompt-textarea',
-        button_selector: 'button#composer-submit-button',
+	html_query: true,
+        button_selector: 'button#composer-submit-button[data-testid="send-button"]',
         reply_selector: 'article > h6 + div',
-        reply_per_query: 1
+        reply_per_query: 1,
     },
     gemini: {
         engine: 'Gemini',
@@ -114,16 +115,22 @@ async function send_query(config, page, query) {
     // Fill the input form with the query.
     const form = await page.waitForSelector(config.form_selector);
     if (config.form_selector.startsWith('textarea')) {
-	await page.type(config.form_selector, query);
+	await form.type(config.form_selector, query);
     } else {
-	let quoted_query = quote_html(query);
-	await page.$eval(config.form_selector, (el, str) => el.innerHTML = str, quoted_query);
+	if (config.html_query) {
+	    let quoted_query = quote_html(query);
+	    await form.evaluate((el, str) => {el.innerHTML = str}, quoted_query);
+	} else {
+	    await form.evaluate((el, str) => {el.textContent = str}, query);
+	}
     }
     // Press the submit button.
     if (config.button_selector == 'press_enter') {
+	await form.click();
 	await page.keyboard.press('Enter');
     } else {
-	const button = await page.waitForSelector(config.button_selector);
+	const button = await page.waitForSelector(config.button_selector,
+						  {visible: true});
 	await button.click();
     }
 }
