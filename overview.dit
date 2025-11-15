@@ -2,23 +2,22 @@
 
 
 
-                                                                        
-              Emacs                                                  Chromium/Chrome   
+
+              Emacs                                                  Chromium/Chrome
      +----------------------+   sending process               +--------------------------+
      | hello                |                                 | ChatGPT                  |
-     |                      | send query to STDOUT            |                          |
+     |                      |                                 |                          |
      |                      +---+                             | how can I help you?      |
-     |                      |   |                             |                          |
+     |                      |   | send query via -s           |                          |
      +----------------------+   |                             |                          |
      | how can I help you?  |   |                             |     +--------------+     |
-     |                      |   |        chatgpt              |     | hello        |     |
-     |                      |   |     (Node.js script)        |     +--------------+     |
+     |                      |   |        chatgpt-cdp          |     | hello        |     |
+     |                      |   |     (Python script)         |     +--------------+     |
      +----------------------+   |    +---------------+        +--------------------------+
-               ^                +--->| - talk CDP    |    localhost:9000    ^ 
-               |                     | - parse HTML  |                      |  
-               +---------------------| - watch reply |<---------------------+                  
+               ^                +--->| - talk CDP    |                      ^  localhost:9000
+               |                     | - parse HTML  |                      |
+               +---------------------| - watch reply |<---------------------+
          receive reply from STDIN    |               |         CDP (Chromium DevTools Protocol)
-                                     +---------------+                     
-          receiving process                                                
-                                                                           
-       
+                via -r               +---------------+
+
+          receiving process
