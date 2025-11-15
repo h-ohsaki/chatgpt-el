@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Remotely control AIs (ChatGPT/Gemini/Claude/DeepSeek) via Chrome/Chromium using CDP protocol
+# Remotely control AIs via Chromium browser using CDP protocol
 # Copyright (c) 2025, Hiroyuki Ohsaki.
 # All rights reserved.
 #
@@ -23,6 +23,7 @@ import json
 import requests
 import sys
 import time
+import collections
 
 from perlcompat import die, warn, getopts
 import tbdump
@@ -30,11 +31,21 @@ import websocket
 
 DEFAULT_TIMEOUT = 5
 
-PAGE_URL = 'https://chatgpt.com'
-# NOTE: Selector must not contain a single quote (').
-FORM_SELECTOR = 'div#prompt-textarea'
-BUTTON_SELECTOR = 'button#composer-submit-button[data-testid="send-button"]'
-REPLY_SELECTOR = 'article > h6 + div'
+Config = collections.namedtuple('Config', 'url form_sel button_sel reply_sel')
+
+CONFIGS = {
+    'chatgpt':
+    Config(
+        url='https://chatgpt.com',
+        form_sel='div#prompt-textarea',
+        button_sel='button#composer-submit-button[data-testid="send-button"]',
+        reply_sel='article > h6 + div'),
+    'gemini':
+    Config(url='https://gemini.google.com/',
+           form_sel='div.textarea',
+           button_sel='button[aria-label="Send message"]',
+           reply_sel='message-content'),
+}
 
 def usage():
     die(f"""\
@@ -51,7 +62,7 @@ def quote_html(s):
         '>': '&gt;',
         '\"': '&quot;',
         "\'": '&#39;',
-        '\n' : '</p><p>',
+        '\n': '</p><p>',
     }
     for c, astr in map.items():
         s = s.replace(c, astr)
@@ -84,7 +95,7 @@ def wait_until_visible(ws, selector):
             break
         time.sleep(1)
 
-def open_wsocket():
+def open_wsocket(config):
     # Identify the first page.
     resp = requests.get('http://127.0.0.1:9000/json/list',
                         timeout=DEFAULT_TIMEOUT)
@@ -95,31 +106,37 @@ def open_wsocket():
     url = page.get('webSocketDebuggerUrl')
     ws = websocket.create_connection(url)
     cdb_send(ws, 'Page.enable')
-    if PAGE_URL not in page.get('url'):
-        cdb_send(ws, 'Page.navigate', {'url': 'https://chatgpt.com'})
+    if config.url not in page.get('url'):
+        cdb_send(ws, 'Page.navigate', {'url': config.url})
     return ws
 
-def send_query(query):
-    ws = open_wsocket()
+def send_query(config, query):
+    ws = open_wsocket(config)
 
     # Fill the textare with the query.
-    wait_until_visible(ws, FORM_SELECTOR)
-    query = query.replace('\n', '\\n')
-    quoted_query = quote_html(query)
-    js = f"document.querySelector('{FORM_SELECTOR}').innerHTML = '{quoted_query}';"
+    wait_until_visible(ws, config.form_sel)
+    if 'textarea' in config.form_sel:
+        query = query.replace('\\', '\\\\')
+        query = query.replace("'", "\\'")
+        query = query.replace("\n", "\\n")
+        js = f"document.querySelector('{config.form_sel}').innerText = '{query}';"
+    else:
+        query = query.replace('\n', '\\n')
+        quoted_query = quote_html(query)
+        js = f"document.querySelector('{config.form_sel}').innerHTML = '{quoted_query}';"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
 
     # Click the submit button.
-    wait_until_visible(ws, BUTTON_SELECTOR)
-    js = f"document.querySelector('{BUTTON_SELECTOR}').click();"
+    wait_until_visible(ws, config.button_sel)
+    js = f"document.querySelector('{config.button_sel}').click();"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
 
-def recv_query():
-    ws = open_wsocket()
+def recv_query(config):
+    ws = open_wsocket(config)
 
     # Dump the inner-html of the last reply.
-    wait_until_visible(ws, REPLY_SELECTOR)
-    js = f"Array.from(document.querySelectorAll('{REPLY_SELECTOR}')).slice(-1)[0].innerHTML"
+    wait_until_visible(ws, config.reply_sel)
+    js = f"Array.from(document.querySelectorAll('{config.reply_sel}')).slice(-1)[0].innerHTML"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
     content = resp['result']['result']['value']
     print(content)
@@ -128,16 +145,15 @@ def main():
     opt = getopts('e:is:r') or usage()
     engine = opt.e if opt.e else 'chatgpt'
     engine = engine.lower()
-    if engine != 'chatgpt':
-        raise NotImplementedError
+    config = CONFIGS[engine]
     if opt.i:
-        ws = open_wsocket()
+        ws = open_wsocket(config)
     if opt.s:
         query = opt.s
-        send_query(query)
+        send_query(config, query)
     if opt.r:
         time.sleep(1)
-        print(recv_query())
+        print(recv_query(config))
 
 if __name__ == "__main__":
     main()
