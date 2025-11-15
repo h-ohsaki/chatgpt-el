@@ -35,10 +35,12 @@
 ;; C-u C-c Q      Insert the pair of the latest query and reply at the point.  
 ;; C-c f          Generate a context that fits at the point.
 
-(defvar chatgpt-prog "~/src/chatgpt-el/chatgpt"
+(defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp"
   "Path to the chatgpt program.")
 (defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api"
   "Path to the chatgpt-api program.")
+(defvar chatgpt-engine "ChatGPT")
+;; (defvar chatgpt-engine "Gemini")
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
     (?s . "Summarize the following in Japanese in a plain academic writing style:")
@@ -309,7 +311,7 @@
 (defun chatgpt-query (arg &optional engine use-api)
   "Send a query to the AI, optionally using ENGINE and API based on ARG."
   (interactive "P")
-  (setq engine (or engine "ChatGPT"))
+  (setq engine (or engine chatgpt-engine))
   (let ((prefix "")
 	(query (chatgpt--find-query)))
     (when (equal arg '(16))
