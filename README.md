@@ -23,9 +23,9 @@ several modules, such access has several drawbacks.
 without the use of an API key.  The program is implemented using
 Chromium/Chrome browser's CDP (Chrome DevTools Protocol)
 (https://chromedevtools.github.io/devtools-protocol/), and therefore requires
-a CDP-enabled Chromium/Chrome browser to be running.  **chatgpt-el** operates
-by remotely controlling your instance of Chromium/Chrome using the Python
-script called `chatgpt-cdp`, which is built on the websocket-client library
+a CDP-enabled browser to be running.  **chatgpt-el** operates by remotely
+controlling your instance of Chromium/Chrome using the Python script called
+`chatgpt-cdp`, which is built on the websocket-client library
 (https://pypi.org/project/websocket-client/). Therefore, your Chromium/Chrome
 browser must accept a CDP connection from the `chatgpt-cdp` script.
 
@@ -125,6 +125,7 @@ by running `chatgpt -i`.
 
 ``` sh
 > ./chatgpt-cdp -i
+> ./chatgpt-cdp -e chatgpt -i
 > ./chatgpt-cdp -e gemini -i
 > ./chatgpt-cdp -e claude -i
 > ./chatgpt-cdp -e deepseek -i
