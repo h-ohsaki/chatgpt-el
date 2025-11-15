@@ -31,7 +31,8 @@ import websocket
 
 DEFAULT_TIMEOUT = 5
 
-Config = collections.namedtuple('Config', 'url form_sel button_sel reply_sel')
+Config = collections.namedtuple('Config',
+                                'url form_sel button_sel reply_sel stop_sel')
 
 CONFIGS = {
     'chatgpt':
@@ -39,12 +40,14 @@ CONFIGS = {
         url='https://chatgpt.com',
         form_sel='div#prompt-textarea',
         button_sel='button#composer-submit-button[data-testid="send-button"]',
-        reply_sel='article > h6 + div'),
+        reply_sel='article > h6 + div',
+        stop_sel='button[aria-label="Stop streaming"]'),
     'gemini':
     Config(url='https://gemini.google.com/',
            form_sel='div.textarea',
            button_sel='button[aria-label="Send message"]',
-           reply_sel='message-content'),
+           reply_sel='message-content',
+           stop_sel='button[aria-label="Stop response"]'),
 }
 
 def usage():
@@ -141,6 +144,12 @@ def recv_query(config):
     content = resp['result']['result']['value']
     print(content)
 
+    # Check if stop button is visible.
+    js = f"document.querySelector('{config.stop_sel}');"
+    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+    if 'objectId' not in resp['result']['result']:
+        print('EOF')
+
 def main():
     opt = getopts('e:is:r') or usage()
     engine = opt.e if opt.e else 'chatgpt'
@@ -153,7 +162,7 @@ def main():
         send_query(config, query)
     if opt.r:
         time.sleep(1)
-        print(recv_query(config))
+        recv_query(config)
 
 if __name__ == "__main__":
     main()
