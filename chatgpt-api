@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# 
+# A simple ChatGPT client using OpenAI module.
 # Copyright (c) 2025, Hiroyuki Ohsaki.
 # All rights reserved.
 #
@@ -82,7 +82,12 @@ usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s query]
   -s query   query string
 """)
 
-def run_query(client, model, instructions, query, max_output_tokens=8192, temperature=0): 
+def run_query(client,
+              model,
+              instructions,
+              query,
+              max_output_tokens=8192,
+              temperature=0):
     print(f'[{model}]')
     stream = client.responses.create(
         model=model,
@@ -113,8 +118,9 @@ def main():
     run_query(client, model, instructions, query)
 
     if compare:
-        print('----------------------------------------------------------------')
+        print(
+            '----------------------------------------------------------------')
         run_query(client, 'gpt-4.1-mini', INSTRUCTIONS, query)
-        
+
 if __name__ == "__main__":
     main()
