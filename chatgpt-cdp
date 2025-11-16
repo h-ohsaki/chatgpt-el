@@ -60,12 +60,21 @@ CONFIGS = {
            button_sel='button[aria-label="Submit message"]',
            reply_sel='div[role="article"]',
            stop_sel='button[aria-label="Interrupt message"]'),
+    'copilot-ent':
+    Config(url='https://m365.cloud.microsoft/chat/',
+           form_sel='span[aria-label="Message Copilot"]',
+           button_sel='button[aria-label="Send"]',
+           reply_sel='div[data-testid="markdown-reply"]',
+           stop_sel='button[aria-label="Stop generating"]'),
 }
 
 def usage():
     die(f"""\
 usage: {sys.argv[0]} [-e engine] [-i] [-s query] [-r]
-  -e engine  AI eingine (default: ChatGPT)
+  -e engine   AI eingine (default: ChatGPT)
+  -i          open the AI engine in the browser
+  -s query    submit the query to the AI engine
+  -r          retrieve the current reply in HTML format
 """)
 
 id_counter = itertools.count(1)
@@ -133,7 +142,7 @@ def send_query(config, query):
     wait_until_visible(ws, config.form_sel)
     js = f"document.querySelector('{config.form_sel}').focus();"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
-    cdb_send(ws, 'Input.insertText', {'text': query })
+    cdb_send(ws, 'Input.insertText', {'text': query})
 
     # Click the submit button.
     wait_until_visible(ws, config.button_sel)
