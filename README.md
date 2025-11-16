@@ -1,15 +1,15 @@
 # NAME
 
-chatgpt-el - interactively access AIs (ChatGPT/Gemini/Claude/DeepSeek) from Emacs
+chatgpt-el - interactively access AIs (ChatGPT/Gemini/Claude/Copilot) from Emacs
 
 ![video](screenshot/video.gif)
 
 # DESCRIPTION
 
 **chatgpt-el** is an Emacs Lisp program designed to interactively access AIs
-(e.g., ChatGPT, Gemini and Claude) from within Emacs.  While those AIs can be
-accessed via API interfaces using a programming language like Python and
-several modules, such access has several drawbacks.
+(e.g., ChatGPT, Gemini, Claude, and Copilot) from within Emacs.  While those
+AIs can be accessed via API interfaces using a programming language like
+Python and several modules, such access has several drawbacks.
 
 1. Batch processing through APIs is slow; accessing APIs is slow, and
    responses can often take an unnecessarily long time.  Such slow response
@@ -73,7 +73,7 @@ You can place `chatgpt-cdp` script anywhere in your system.
 > chromium --remote-debugging-port=9000 --remote-allow-origins=http://127.0.0.1:9000
 ```
 
-2. Visit ChatGPT/Gemini/Claude/DeepSeek in Chromium/Chrome, and login with
+2. Visit ChatGPT/Gemini/Claude/Copilot in Chromium/Chrome, and login with
    your account.
 
 3. In Emacs, move the point (i.e., the cursor in Emacs) at the end of the
@@ -120,7 +120,7 @@ Content-Type:application/json; charset=UTF-8
 }
 ```
 
-2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Claude/DeepSeek page
+2. Make sure your Chrome/Chromium visits ChatGPT/Gemini/Claude/Copilot page
 by running `chatgpt -i`.
 
 ``` sh
@@ -128,7 +128,8 @@ by running `chatgpt -i`.
 > ./chatgpt-cdp -e chatgpt -i
 > ./chatgpt-cdp -e gemini -i
 > ./chatgpt-cdp -e claude -i
-> ./chatgpt-cdp -e deepseek -i
+> ./chatgpt-cdp -e copilot -i
+> ./chatgpt-cdp -e copilot-ent -i
 ```
 
 3. Send a query (e.g., `hello`) to the AI.
