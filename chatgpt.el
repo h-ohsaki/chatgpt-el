@@ -38,9 +38,6 @@
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp")
 (defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
 (defvar chatgpt-engine "ChatGPT")
-;; (defvar chatgpt-engine "Gemini")
-;; (defvar chatgpt-engine "Claude")
-;; (defvar chatgpt-engine "CoPilot")
 (defvar chatgpt-use-api nil)
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -352,13 +349,14 @@ Do not add '> ' at the beginning of lines.
   "Change the AI engine."
   (interactive)
   (let ((ch (read-char-from-minibuffer
-	     "Select AI engine (c:ChatGPT, g:Gemini, l:Claude, p:CoPilot): ")))
+	     "Select engine (c:ChatGPT, g:Gemini, l:Claude, p:Copilot, e:Copilot-Enterprise): ")))
     (setq chatgpt-engine
           (pcase ch
             (?c "ChatGPT")
             (?g "Gemini")
             (?l "Claude")
-            (?p "CoPilot")
+            (?p "Copilot")
+            (?e "Copilot-Enterprise")
             (_ chatgpt-engine)))
     (chatgpt--update-mode-name "ready")))
   
