@@ -39,6 +39,9 @@
 (defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
 (defvar chatgpt-engine "ChatGPT")
 ;; (defvar chatgpt-engine "Gemini")
+;; (defvar chatgpt-engine "Claude")
+;; (defvar chatgpt-engine "CoPilot")
+(defvar chatgpt-use-api nil)
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
     (?s . "Summarize the following in Japanese in a plain academic writing style:")
@@ -73,7 +76,6 @@
 (defvar chatgpt--buffer-name "*ChatGPT reply*")
 (defvar chatgpt--raw-buffer-name "*ChatGPT raw*")
 (defvar chatgpt--last-query nil)
-(defvar chatgpt--last-engine nil)
 (defvar chatgpt--last-raw-reply nil)
 (defvar chatgpt--process nil)
 (defvar chatgpt--monitor-process nil)
@@ -81,10 +83,11 @@
 (defvar chatgpt--monitor-ntries nil)
 
 ;; ---------------- Utils
-(defun chatgpt--update-mode-name (engine use-api status)
-  "Update the mode name to reflect the current engine, API usage, and status."
-  (setq mode-name (format "%s%s:%s" engine
-			  (if use-api "_API" "")
+(defun chatgpt--update-mode-name (status)
+  "Update the mode name to reflect the current status."
+  (setq mode-name (format "%s%s:%s"
+			  chatgpt-engine
+			  (if chatgpt-use-api "_API" "")
 			  status)))
 
 (defun chatgpt-mode ()
@@ -137,32 +140,29 @@
     (setq query (replace-regexp-in-string "^Q\\. *" "" query))
     query))
 
-(defun chatgpt--send-query (query &optional engine use-api)
-  "Send QUERY to the engine specified by ENGINE, using API if USE-API is non-nil."
-  (chatgpt--init engine use-api)
+(defun chatgpt--send-query (query)
+  "Send query QUERY to the AI."
+  (chatgpt--init)
   (chatgpt--stop-monitor)
-  (chatgpt--start-monitor engine use-api)
+  (chatgpt--start-monitor)
   ;; Stop the process if already running.
   (when (memq chatgpt--process (process-list))
     (kill-process chatgpt--process))
   ;; Start Chromium if not running.
-  (unless use-api
+  (unless chatgpt-use-api
     (let ((pid (string-trim (shell-command-to-string "pidof chromium"))))
       (when (string-empty-p pid)
         (start-process "chromium" nil "chromium"
 		       "--remote-debugging-port=9000"
 		       "--remote-allow-origins=http://127.0.0.1:9000")
 	(sleep-for 3.))))
-  (let ((prog (if use-api chatgpt-prog-api chatgpt-prog)))
+  (let ((prog (if chatgpt-use-api chatgpt-prog-api chatgpt-prog)))
     (setq chatgpt--process
 	  (start-process "ChatGPT" chatgpt--buffer-name
-			 prog "-e" engine "-s" query)))
+			 prog "-e" chatgpt-engine "-s" query)))
   (set-process-filter chatgpt--process 'chatgpt--process-filter)
-  ;; Catch the end of reply with the sentinel in API mode.
-  (if use-api
-      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel))
-  (setq chatgpt--last-query query)
-  (setq chatgpt--last-engine engine))
+  (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
+  (setq chatgpt--last-query query))
 
 (defun chatgpt--process-filter (proc string)
   "Process the output STRING from the process PROC."
@@ -176,14 +176,14 @@
         (put-text-property (match-beginning 1) (match-end 1) 'invisible t)
         (put-text-property (match-beginning 2) (match-end 2) 'invisible t)))))
 
-;; This sentinel is used only in API mode.
 (defun chatgpt--process-sentinel (proc event)
   "Handle the completion EVENT of the process PROC."
   (when (string-match "finished" event)
-    (chatgpt--query-finished)))
+    (if chatgpt-use-api
+	(chatgpt--query-finished))))
 
-(defun chatgpt--init (engine use-api)
-  "Initialize the environment for ENGINE and API usage if USE-API is non-nil."
+(defun chatgpt--init ()
+  "Initialize the environment."
   (interactive)
   (when (and chatgpt--process
 	     (process-live-p chatgpt--process))
@@ -196,7 +196,7 @@
     (with-current-buffer buf
       (erase-buffer)
       (chatgpt-mode)
-      (chatgpt--update-mode-name engine use-api "streaming"))
+      (chatgpt--update-mode-name "streaming"))
     ;; Display in the other window.
     (delete-other-windows)
     (split-window)
@@ -218,7 +218,7 @@
   (when chatgpt--last-query 
     (let* ((save-silently t)
            (base (format-time-string "%Y%m%d"))
-	   (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt--last-engine base)))
+	   (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt-engine base)))
       (with-temp-buffer
 	(insert "\n** ")
 	;; Insert query and reply at the point.
@@ -226,12 +226,12 @@
 	(write-region (point-min) (point-max) file 'append)))))
 
 ;; ---------------- Reply monitor.
-(defun chatgpt--start-monitor (engine use-api)
-  "Start monitoring replies for the specified ENGINE, using API if USE-API is non-nil."
-  (when (not use-api)
+(defun chatgpt--start-monitor ()
+  "Start monitoring replies."
+  (when (not chatgpt-use-api)
     ;; Schedule the next timer event.
     (setq chatgpt--monitor-ntries 0)
-    (chatgpt--sched-monitor-event engine)))
+    (chatgpt--sched-monitor-event)))
 
 (defun chatgpt--stop-monitor ()
   "Stop the reply monitoring process."
@@ -240,18 +240,18 @@
     (cancel-timer chatgpt--monitor-timer)
     (setq chatgpt--monitor-timer nil)))
 
-(defun chatgpt--sched-monitor-event (engine)
-  "Schedule a monitoring event for the specified ENGINE."
+(defun chatgpt--sched-monitor-event ()
+  "Schedule a monitoring event."
   (setq chatgpt--monitor-timer
-	(run-with-timer .5 nil 'chatgpt--monitor-event engine)))
+	(run-with-timer .2 nil 'chatgpt--monitor-event)))
 
-(defun chatgpt--monitor-event (engine)
-  "Monitor the replies for the specified ENGINE."
+(defun chatgpt--monitor-event ()
+  "Monitor the replies from the AI."
   (let ((buf (get-buffer-create chatgpt--raw-buffer-name)))
     (with-current-buffer buf
       (erase-buffer)
       (setq chatgpt--monitor-process
-	    (start-process "chatgpt" buf chatgpt-prog "-e" engine "-r"))
+	    (start-process "chatgpt" buf chatgpt-prog "-e" chatgpt-engine "-r"))
       (set-process-sentinel chatgpt--monitor-process
 			    'chatgpt--monitor-process-sentinel))))
 
@@ -264,8 +264,8 @@
   (chatgpt--replace-regexp "’" "'")
   (chatgpt--replace-regexp "—" "---")
   (chatgpt--replace-regexp "–" "-")
-  (chatgpt--replace-regexp "SVG Image\n" ""))
-
+  (chatgpt--replace-regexp "^Edit in a page$" ""))
+  
 (defun chatgpt--monitor-process-sentinel (proc event)
   "Handle the completion EVENT of the monitor process PROC."
   (when (string-match-p "finished" event)
@@ -278,7 +278,7 @@
                (last-pnt (window-point win))
                (last-start (window-start win)))
 	  (with-current-buffer chatgpt--buffer-name
-	    (chatgpt--update-mode-name chatgpt--last-engine nil "streaming")
+	    (chatgpt--update-mode-name "streaming")
 	    (erase-buffer)
 	    (insert reply)
 	    (shr-render-region (point-min) (point-max))
@@ -289,34 +289,34 @@
 	(setq chatgpt--last-raw-reply reply)
 	(setq chatgpt--monitor-ntries 0))
       (if (or (string-suffix-p "\nEOF\n" reply)
-	      (>= chatgpt--monitor-ntries 20)) ;; .5 seconds x 20 = 10 seconds.
+	      (>= chatgpt--monitor-ntries 50)) ;; .2 seconds x 50 = 10 seconds.
 	  ;; Finished
 	  (chatgpt--query-finished)
 	;; Schedule the next event
-	(chatgpt--sched-monitor-event chatgpt--last-engine)))))
+	(chatgpt--sched-monitor-event)))))
 
 (defun chatgpt--query-finished ()
   "Handle the completion of a query."
   (with-current-buffer chatgpt--buffer-name
-    (chatgpt--update-mode-name chatgpt--last-engine nil "finished"))
+    (chatgpt--update-mode-name "finished"))
   (chatgpt--save-reply))
 
 ;; ---------------- User-level interfaces.
-(defun chatgpt-query (arg &optional engine use-api)
-  "Send a query to the AI, optionally using ENGINE and API based on ARG."
+(defun chatgpt-query (arg)
+  "Send a query to the AI."
   (interactive "P")
-  (setq engine (or engine chatgpt-engine))
   (let ((prefix "")
 	(query (chatgpt--find-query)))
     (when (equal arg '(16))
       (setq prefix (chatgpt--read-prefix)))
     (when arg
-      (setq query (read-string (format "%s query: " engine) query)))
-    (chatgpt--send-query (concat prefix query) engine use-api)))
+      (setq query (read-string (format "%s query: " chatgpt-engine) query)))
+    (chatgpt--send-query (concat prefix query))))
 
-(defun chatgpt-query-api (arg &optional engine)
+(defun chatgpt-query-api (arg)
   (interactive "P")
-  (chatgpt-query arg engine t))
+  (let ((chatgpt-use-api nil))
+    (chatgpt-query arg)))
 
 (defun chatgpt-insert-reply (arg)
   "Insert the latest reply from the AI. If ARG is non-nil, include the query."
@@ -328,12 +328,9 @@
 	  (insert "A. " reply))
       (insert reply))))
 
-(defun chatgpt-fill (&optional engine use-api)
-  "Guess a content that fits at the the point, using ENGINE and API if specified."
+(defun chatgpt-fill ()
+  "Guess a content that fits at the the point."
   (interactive)
-  (setq engine (or engine "ChatGPT"))
-  ;; FIXME: Do not force to use API.
-  (setq use-api t)
   (let* ((pnt (point))
 	 (buf (buffer-string))
 	 (prefix "Write sentences/program that fits in __FILL_THIS_PART__ in the text after ----.
@@ -347,10 +344,22 @@ Do not add '> ' at the beginning of lines.
 	 (query (concat (substring buf 0 (1- pnt))
 			"__FILL_THIS_PART__"
 			(substring buf (1- pnt)))))
-    (chatgpt--send-query (concat prefix query) engine use-api)))
+    (let ((chatgpt-use-api t))
+      (chatgpt--send-query (concat prefix query)))))
 
-(defun chatgpt-fill-api (&optional engine)
+;; (chatgpt-select-engine)
+(defun chatgpt-select-engine ()
+  "Change the AI engine."
   (interactive)
-  (chatgpt-fill engine t))
-
+  (let ((ch (read-char-from-minibuffer
+	     "Select AI engine (c:ChatGPT, g:Gemini, l:Claude, p:CoPilot): ")))
+    (setq chatgpt-engine
+          (pcase ch
+            (?c "ChatGPT")
+            (?g "Gemini")
+            (?l "Claude")
+            (?p "CoPilot")
+            (_ chatgpt-engine)))
+    (chatgpt--update-mode-name "ready")))
+  
 (provide 'chatgpt)
