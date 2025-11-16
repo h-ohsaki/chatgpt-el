@@ -46,7 +46,7 @@ CONFIGS = {
     Config(url='https://gemini.google.com/',
            form_sel='div.textarea',
            button_sel='button[aria-label="Send message"]',
-           reply_sel='message-content',
+           reply_sel='response-container',
            stop_sel='button[aria-label="Stop response"]'),
     'claude':
     Config(url='https://claude.ai/',
@@ -54,6 +54,12 @@ CONFIGS = {
            button_sel='button[aria-label="Send message"]',
            reply_sel='div[data-test-render-count]',
            stop_sel='button[aria-label="Stop response"]'),
+    'copilot':
+    Config(url='https://copilot.microsoft.com/',
+           form_sel='textarea[placeholder="Message Copilot"]',
+           button_sel='button[aria-label="Submit message"]',
+           reply_sel='div[role="article"]',
+           stop_sel='button[aria-label="Interrupt message"]'),
 }
 
 def usage():
@@ -95,14 +101,15 @@ def wait_until_visible(ws, selector):
     const el = document.querySelector('{selector}');
     if (!el) return false;
     const style = window.getComputedStyle(el);
-    return (style && style.display !== 'none' && style.visibility !== 'hidden' && el.innerHTML.trim().length > 0);
+    return (style && style.display !== 'none' && style.visibility !== 'hidden');
 }})()
 """
-    while True:
+    for i in range(DEFAULT_TIMEOUT):
         resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
         if resp['result']['result']['value']:
-            break
+            return
         time.sleep(1)
+    raise TimeoutError
 
 def open_wsocket(config):
     # Identify the first page.
@@ -124,16 +131,9 @@ def send_query(config, query):
 
     # Fill the textare with the query.
     wait_until_visible(ws, config.form_sel)
-    # Workaround for Gemini's TrustedHTML enforcement.
-    if 'textarea' in config.form_sel:
-        query = query.replace('\\', '\\\\')
-        query = query.replace("\n", "\\n")
-        query = query.replace("'", "\\'")
-        js = f"document.querySelector('{config.form_sel}').textContent = '{query}';"
-    else:
-        quoted_query = quote_html(query)
-        js = f"document.querySelector('{config.form_sel}').innerHTML = '{quoted_query}';"
+    js = f"document.querySelector('{config.form_sel}').focus();"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+    cdb_send(ws, 'Input.insertText', {'text': query })
 
     # Click the submit button.
     wait_until_visible(ws, config.button_sel)
