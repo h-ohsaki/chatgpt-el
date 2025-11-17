@@ -357,7 +357,6 @@ Do not add '> ' at the beginning of lines.
             (?l "Claude")
             (?p "Copilot")
             (?e "Copilot-Enterprise")
-            (_ chatgpt-engine)))
-    (chatgpt--update-mode-name "ready")))
+            (_ chatgpt-engine)))))
   
 (provide 'chatgpt)
