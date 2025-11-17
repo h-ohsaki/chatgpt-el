@@ -52,11 +52,15 @@ your environment.
 > cat <<EOF >>~/.emacs
 ;; chatgpt-el
 (autoload 'chatgpt-query "chatgpt" nil t)
+(autoload 'chatgpt-query-api "chatgpt" nil t)
 (autoload 'chatgpt-insert-reply "chatgpt" nil t)
-(autoload 'chatgpt-fill-at-point "chatgpt" nil t)
+(autoload 'chatgpt-fill "chatgpt" nil t)
+(autoload 'chatgpt-select-engine "chatgpt" nil t)
 (global-set-key "\C-cb" 'chatgpt-query)
+(global-set-key "\C-cq" 'chatgpt-query-api)
 (global-set-key "\C-cQ" 'chatgpt-insert-reply)
-(global-set-key "\C-cf" 'chatgpt-fill-at-point)
+(global-set-key "\C-cf" 'chatgpt-fill)
+(global-set-key "\C-cE" 'chatgpt-select-engine)
 (setq chatgpt-engine "ChatGPT")
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt-cdp")
 EOF
@@ -94,6 +98,9 @@ You can place `chatgpt-cdp` script anywhere in your system.
    handy to replace the query text with the reply from the Ai. To do this,
    type `C-u C-u C-c Q`.
 
+7. You can change the AI engine to use by typing `C-c E` or executing M-x
+   chatgpt-select-engine.
+
 # TROUBLE SHOOTING
 
 1. Make sure your Chromium/Chrome accepts a CDP connection on localhost:9000.
@@ -129,7 +136,7 @@ by running `chatgpt -i`.
 > ./chatgpt-cdp -e gemini -i
 > ./chatgpt-cdp -e claude -i
 > ./chatgpt-cdp -e copilot -i
-> ./chatgpt-cdp -e copilot-ent -i
+> ./chatgpt-cdp -e copilot-enterprise -i
 ```
 
 3. Send a query (e.g., `hello`) to the AI.
