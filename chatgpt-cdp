@@ -60,7 +60,7 @@ CONFIGS = {
            button_sel='button[aria-label="Submit message"]',
            reply_sel='div[role="article"]',
            stop_sel='button[aria-label="Interrupt message"]'),
-    'copilot-ent':
+    'copilot-enterprise':
     Config(url='https://m365.cloud.microsoft/chat/',
            form_sel='span[aria-label="Message Copilot"]',
            button_sel='button[aria-label="Send"]',
@@ -162,7 +162,8 @@ def recv_query(config):
     # Check if stop button is visible.
     js = f"document.querySelector('{config.stop_sel}');"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
-    if 'objectId' not in resp['result']['result']:
+    is_replying = 'objectId' in resp['result']['result']
+    if not is_replying:
         print('EOF')
 
 def main():
