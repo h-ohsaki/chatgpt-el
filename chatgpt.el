@@ -20,17 +20,22 @@
 
 ;; Add the following lines to ~/.emacs:
 ;; (autoload 'chatgpt-query "chatgpt" nil t)
+;; (autoload 'chatgpt-query-api "chatgpt" nil t)
 ;; (autoload 'chatgpt-insert-reply "chatgpt" nil t)
-;; (autoload 'chatgpt-fill-at-point "chatgpt" nil t)
-;; (global-set-key "\C-cq" 'chatgpt-query-api)
+;; (autoload 'chatgpt-fill "chatgpt" nil t)
+;; (autoload 'chatgpt-select-engine "chatgpt" nil t)
 ;; (global-set-key "\C-cb" 'chatgpt-query)
+;; (global-set-key "\C-cq" 'chatgpt-query-api)
 ;; (global-set-key "\C-cQ" 'chatgpt-insert-reply)
-;; (global-set-key "\C-cf" 'chatgpt-fill-at-point-api)
-;;
+;; (global-set-key "\C-cf" 'chatgpt-fill)
+;; (global-set-key "\C-cE" 'chatgpt-select-engine)
+;; (setq chatgpt-engine "ChatGPT")
+;; (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt-cdp")
+
 ;; Usage:
-;; C-c q          Send a query near the point.
-;; C-u C-c q      Send a query near the point after revising the query in the minibuffer.
-;; C-u C-u C-c q  Send a query near the point after selecting a query prefix.
+;; C-c b          Send a query near the point.
+;; C-u C-c b      Send a query near the point after revising the query in the minibuffer.
+;; C-u C-u C-c b  Send a query near the point after selecting a query prefix.
 ;; C-c Q          Insert the latest reply at the point.  
 ;; C-u C-c Q      Insert the pair of the latest query and reply at the point.  
 ;; C-c f          Generate a context that fits at the point.
