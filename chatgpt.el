@@ -317,7 +317,7 @@
 
 (defun chatgpt-query-api (arg)
   (interactive "P")
-  (let ((chatgpt-use-api nil))
+  (let ((chatgpt-use-api t))
     (chatgpt-query arg)))
 
 (defun chatgpt-insert-reply (arg)
