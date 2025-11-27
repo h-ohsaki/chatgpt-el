@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+#
+# A simple Gemini client using Google Generative AI module.
+# Copyright (c) 2025, Hiroyuki Ohsaki.
+# All rights reserved.
+#
+# $Id: gemini-chat,v 1.0 2025/11/27 12:00:00 ohsaki Exp $
+#
+
+import os
+import sys
+
+import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from perlcompat import die, warn, getopts
+
+# Model Name             Output   Input    Speed        Context
+# -----------------------------------------------------------------
+# gemini-3-pro-preview   $12.00   $2.00    Variable*    1M
+# gemini-2.5-flash       $0.20    $0.05    Fastest      2M
+# gemini-1.5-pro         $10.50   $3.50    Medium       2M
+# gemini-1.5-flash       $0.30    $0.075   Fast         2M
+
+INSTRUCTIONS = """\
+あなたは親切で信頼できる優秀な AI アドバイザです。
+ユーザーの質問意図をくみ取り、
+論理的な文章を心がけてください。
+
+読者は情報工学分野で、
+ネットワークアーキテクチャを専門分野とする大学教員です。
+情報工学や情報ネットワークに関する基本的な事柄は説明する必要がありません。
+
+文章は自然な日本語で、
+必要に応じて段落や箇条書き、
+表現の工夫 (例や補足) を使って Markdown 形式で説明してください。
+不要な繰り返しは避けながら、
+有益な情報をできるだけ多く提供してください。
+
+専門用語には元となる英語を括弧書きで表記してください。
+
+事実やエビデンスを重視して回答してください。
+最新の研究やデータに基づいた情報を提供してください。
+事実に関する質問に答える際、
+自身の知識だけで 100% の確信が持てない場合は、
+決して推測で答えないでください。
+代わりに「情報が確認できなかった」と答えてください。
+
+誤解されることが多い概念には、
+どのように誤解されることが多いか例とともに示してください。
+
+もし可能であれば、
+より深く学ぶために役立つと思われる、
+周辺情報や、エピソード、類似した概念との関係性を説明してください。
+"""
+
+def usage():
+    die(f"""\
+usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s query]
+  -v         verbose mode
+  -c         compare mode (also display the reply from gemini-1.5-flash)
+  -e engine  specify AI engine (default: gemini)
+  -m model   specify LLM model (default: gemini-1.5-pro)
+  -i instr   specify instructions
+  -s query   query string
+""")
+
+def run_query(model_name,
+              instructions,
+              query,
+              max_output_tokens=8192,
+              temperature=0.0): # Gemini defaults are slightly different, explicit float usually safer
+    
+    if verbose:
+        print(f'[{model_name}]')
+
+    try:
+        # Configure the model with system instructions (system_instruction)
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=instructions
+        )
+
+        # Generation config
+        generation_config = genai.types.GenerationConfig(
+            max_output_tokens=max_output_tokens,
+            temperature=temperature,
+        )
+
+        # Safety settings (Blocking none to match typical dev use-cases, adjust as needed)
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
+
+        response = model.generate_content(
+            query,
+            generation_config=generation_config,
+            safety_settings=safety_settings,
+            stream=True
+        )
+
+        for chunk in response:
+            print(chunk.text, end='', flush=True)
+        print()
+
+    except Exception as e:
+        warn(f"Error occurred: {e}")
+
+def main():
+    global verbose
+    opt = getopts('vce:m:i:s:') or usage()
+    verbose = opt.v
+    compare = opt.c
+    # engine = opt.e or 'gemini' # Not actively used but kept for arg compatibility
+    model = opt.m or 'gemini-2.5-flash'
+    instructions = opt.i or INSTRUCTIONS
+    query = opt.s
+
+    # Retrieve API Key from Environment Variable
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        die("Error: GOOGLE_API_KEY environment variable not set.")
+    
+    genai.configure(api_key=api_key)
+
+    if query:
+        run_query(model, instructions, query)
+
+        if compare:
+            print('-' * 64)
+            # Use 2.5-flash as the fast comparison baseline
+            run_query('gemini-2.5-flash', instructions, query)
+    else:
+        usage()
+
+if __name__ == "__main__":
+    main()
