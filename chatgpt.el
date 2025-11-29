@@ -39,6 +39,7 @@
 ;; C-c Q          Insert the latest response at the point.  
 ;; C-u C-c Q      Insert the pair of the latest prompt and response at the point.  
 ;; C-c f          Generate a context that fits at the point.
+;; C-c E          Select AI engine.
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp")
 ;; (defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
