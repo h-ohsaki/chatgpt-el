@@ -6,6 +6,7 @@
 #
 
 import os
+import re
 import sys
 
 import google.generativeai as genai
@@ -61,33 +62,45 @@ usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-i instr] [-s prompt]
   -s prompt   prompt string
 """)
 
+def expand_macros(astr):
+    def _include(match):
+        file = match.group(1).strip()
+        try:
+            with open(file) as f:
+                return f.read()
+        except FileNotFoundError:
+            return match.group(0)
+
+    pattern = re.compile(r'\[\[(.+?)\]\]')
+    return pattern.sub(_include, astr)
+
 def send_prompt(model_name,
-              instructions,
-              prompt,
-              max_output_tokens=8192,
-              temperature=0.):
+                instructions,
+                prompt,
+                max_output_tokens=8192,
+                temperature=0.):
     if verbose:
         print(f'[{model_name}]')
-    model = genai.GenerativeModel(
-        model_name=model_name,
-        system_instruction=instructions
-    )
+    model = genai.GenerativeModel(model_name=model_name,
+                                  system_instruction=instructions)
     generation_config = genai.types.GenerationConfig(
         max_output_tokens=max_output_tokens,
         temperature=temperature,
     )
     safety_settings = {
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_HARASSMENT:
+        HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH:
+        HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT:
+        HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT:
+        HarmBlockThreshold.BLOCK_NONE,
     }
-    response = model.generate_content(
-        prompt,
-        generation_config=generation_config,
-        safety_settings=safety_settings,
-        stream=True
-    )
+    response = model.generate_content(prompt,
+                                      generation_config=generation_config,
+                                      safety_settings=safety_settings,
+                                      stream=True)
     for chunk in response:
         print(chunk.text, end='', flush=True)
     print()
@@ -101,6 +114,7 @@ def main():
     model = opt.m or 'gemini-2.5-flash'
     instructions = opt.i or INSTRUCTIONS
     prompt = opt.s if opt.s else sys.stdin.read().strip()
+    prompt = expand_macros(prompt)
 
     api_key = os.environ.get('GOOGLE_API_KEY')
     genai.configure(api_key=api_key)
