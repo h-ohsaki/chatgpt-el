@@ -19,30 +19,36 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; Add the following lines to ~/.emacs:
-;; (autoload 'chatgpt-query "chatgpt" nil t)
-;; (autoload 'chatgpt-query-api "chatgpt" nil t)
-;; (autoload 'chatgpt-insert-reply "chatgpt" nil t)
+;; (autoload 'chatgpt-send "chatgpt" nil t)
+;; (autoload 'chatgpt-send-api "chatgpt" nil t)
+;; (autoload 'chatgpt-insert-response "chatgpt" nil t)
 ;; (autoload 'chatgpt-fill "chatgpt" nil t)
 ;; (autoload 'chatgpt-select-engine "chatgpt" nil t)
-;; (global-set-key "\C-cb" 'chatgpt-query)
-;; (global-set-key "\C-cq" 'chatgpt-query-api)
-;; (global-set-key "\C-cQ" 'chatgpt-insert-reply)
+;; (global-set-key "\C-cb" 'chatgpt-send)
+;; (global-set-key "\C-cq" 'chatgpt-send-api)
+;; (global-set-key "\C-cQ" 'chatgpt-insert-response)
 ;; (global-set-key "\C-cf" 'chatgpt-fill)
 ;; (global-set-key "\C-cE" 'chatgpt-select-engine)
 ;; (setq chatgpt-engine "ChatGPT")
 ;; (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt-cdp")
 
 ;; Usage:
-;; C-c b          Send a query near the point.
-;; C-u C-c b      Send a query near the point after revising the query in the minibuffer.
-;; C-u C-u C-c b  Send a query near the point after selecting a query prefix.
-;; C-c Q          Insert the latest reply at the point.  
-;; C-u C-c Q      Insert the pair of the latest query and reply at the point.  
+;; C-c b          Send a prompt near the point.
+;; C-u C-c b      Send a prompt near the point after revising the prompt in the minibuffer.
+;; C-u C-u C-c b  Send a prompt near the point after selecting a prompt prefix.
+;; C-c Q          Insert the latest response at the point.  
+;; C-u C-c Q      Insert the pair of the latest prompt and response at the point.  
 ;; C-c f          Generate a context that fits at the point.
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp")
-(defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
-(defvar chatgpt-engine "ChatGPT")
+;; (defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
+(defvar chatgpt-prog-api "~/src/chatgpt-el/gemini-api")
+(defvar chatgpt-engine "Gemini")
+;; (defvar chatgpt-browser-prog "chromium")
+;; (defvar chatgpt-browser-args '("--remote-debugging-port=9000"
+;; 			       "--remote-allow-origins=http://127.0.0.1:9000"))
+(defvar chatgpt-browser-prog "qutebrowser")
+(defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9001"))
 (defvar chatgpt-use-api nil)
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -53,7 +59,7 @@
     (?r . "Rewrite the following in a plain academic writing style:")
     (?R . "Refactor the code starting from ----.  Do not delete any comment.  Add a short docstring for functions if missing. ----")
     )
-  "Alist of query prefixes.")
+  "Alist of prompt prefixes.")
 
 (defvar chatgpt-font-lock-keywords
   '(;; comment
@@ -75,10 +81,10 @@
     ("\".+?\"" . font-lock-string-face)
     ("'.+?'" . font-lock-string-face)))
 
-(defvar chatgpt--buffer-name "*ChatGPT reply*")
+(defvar chatgpt--buffer-name "*ChatGPT response*")
 (defvar chatgpt--raw-buffer-name "*ChatGPT raw*")
-(defvar chatgpt--last-query nil)
-(defvar chatgpt--last-raw-reply nil)
+(defvar chatgpt--last-prompt nil)
+(defvar chatgpt--last-raw-response nil)
 (defvar chatgpt--process nil)
 (defvar chatgpt--monitor-process nil)
 (defvar chatgpt--monitor-timer nil)
@@ -110,61 +116,63 @@
 
 ;; ---------------- Low level interfaces
 (defun chatgpt--read-prefix ()
-  "Prompt the user to select a query prefix."
+  "Prompt the user to select a prompt prefix."
   (let* ((ch (read-char
 	      "Select [w]hat/[s]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[R]efactor: "))
 	 (elem (assoc ch chatgpt-prefix-alist))
 	 (prefix (cdr elem)))
     prefix))
 
-(defun chatgpt--find-query ()
-  "Find the query based on the current point or selected region."
-  (let (beg end query)
+(defun chatgpt--find-prompt ()
+  "Find the prompt based on the current point or selected region."
+  (let (beg end prompt)
     (cond
      ;; Region is selected.
      (mark-active
       (setq beg (region-beginning))
       (setq end (region-end))
-      (setq query (buffer-substring-no-properties beg end)))
+      (setq prompt (buffer-substring-no-properties beg end)))
      ;; A character follows the point.
      ((looking-at "\\w")
-      (setq query (thing-at-point 'word)))
+      (setq prompt (thing-at-point 'word)))
      ;; Possibly, at the end line.
      (t
-      (setq query (string-trim
+      (setq prompt (string-trim
 		   (or (thing-at-point 'paragraph)
 		       "")))
       (setq beg (save-excursion
-		  (search-backward query nil t)
+		  (search-backward prompt nil t)
 		  (point)))
       (setq end (point))))
     ;; Remove the preceding Q.
-    (setq query (replace-regexp-in-string "^Q\\. *" "" query))
-    query))
+    (setq prompt (replace-regexp-in-string "^Q\\. *" "" prompt))
+    prompt))
 
-(defun chatgpt--send-query (query)
-  "Send query QUERY to the AI."
+(defun chatgpt--send-prompt (prompt)
+  "Send prompt PROMPT to the AI."
   (chatgpt--init)
   (chatgpt--stop-monitor)
   (chatgpt--start-monitor)
   ;; Stop the process if already running.
   (when (memq chatgpt--process (process-list))
     (kill-process chatgpt--process))
-  ;; Start Chromium if not running.
+  ;; Start web browser if not running.
   (unless chatgpt-use-api
-    (let ((pid (string-trim (shell-command-to-string "pidof chromium"))))
+    (let ((pid (string-trim
+		(shell-command-to-string (format "pgrep %s" chatgpt-browser-prog)))))
       (when (string-empty-p pid)
-        (start-process "chromium" nil "chromium"
-		       "--remote-debugging-port=9000"
-		       "--remote-allow-origins=http://127.0.0.1:9000")
+	(apply 'start-process
+	       chatgpt-browser-prog nil
+	       chatgpt-browser-prog
+	       chatgpt-browser-args)
 	(sleep-for 3.))))
   (let ((prog (if chatgpt-use-api chatgpt-prog-api chatgpt-prog)))
     (setq chatgpt--process
 	  (start-process "ChatGPT" chatgpt--buffer-name
-			 prog "-e" chatgpt-engine "-s" query)))
+			 prog "-e" chatgpt-engine "-s" prompt)))
   (set-process-filter chatgpt--process 'chatgpt--process-filter)
   (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
-  (setq chatgpt--last-query query))
+  (setq chatgpt--last-prompt prompt))
 
 (defun chatgpt--process-filter (proc string)
   "Process the output STRING from the process PROC."
@@ -182,7 +190,7 @@
   "Handle the completion EVENT of the process PROC."
   (when (string-match "finished" event)
     (if chatgpt-use-api
-	(chatgpt--query-finished))))
+	(chatgpt--response-finished))))
 
 (defun chatgpt--init ()
   "Initialize the environment."
@@ -194,7 +202,7 @@
 	     (process-live-p chatgpt--monitor-process))
     (kill-process chatgpt--monitor-process))
   (let ((buf (get-buffer-create chatgpt--buffer-name)))
-    ;; Initialize the reply buffer.
+    ;; Initialize the response buffer.
     (with-current-buffer buf
       (erase-buffer)
       (chatgpt-mode)
@@ -204,30 +212,30 @@
     (split-window)
     (set-window-buffer (next-window) buf)))
 
-(defun chatgpt--extract-raw-reply ()
-  "Extract the raw reply from the AI engine."
+(defun chatgpt--extract-raw-response ()
+  "Extract the raw response from the AI engine."
   (with-current-buffer chatgpt--raw-buffer-name
     (buffer-string)))
 
-(defun chatgpt--extract-reply ()
-  "Extract the reply from the AI engine."
+(defun chatgpt--extract-response ()
+  "Extract the response from the AI engine."
   (with-current-buffer chatgpt--buffer-name
     (buffer-string)))
 
-(defun chatgpt--save-reply ()
-  "Save the last query and reply to a log file."
+(defun chatgpt--save-response ()
+  "Save the last prompt and response to a log file."
   (interactive)
-  (when chatgpt--last-query 
+  (when chatgpt--last-prompt 
     (let* ((save-silently t)
            (base (format-time-string "%Y%m%d"))
 	   (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt-engine base)))
       (with-temp-buffer
 	(insert "\n** ")
-	;; Insert query and reply at the point.
-	(chatgpt-insert-reply '(4))
+	;; Insert prompt and response at the point.
+	(chatgpt-insert-response '(4))
 	(write-region (point-min) (point-max) file 'append)))))
 
-;; ---------------- Reply monitor.
+;; ---------------- Response monitor.
 (defun chatgpt--start-monitor ()
   "Start monitoring replies."
   (when (not chatgpt-use-api)
@@ -236,7 +244,7 @@
     (chatgpt--sched-monitor-event)))
 
 (defun chatgpt--stop-monitor ()
-  "Stop the reply monitoring process."
+  "Stop the response monitoring process."
   (when (and chatgpt--monitor-timer
 	     (timerp chatgpt--monitor-timer))
     (cancel-timer chatgpt--monitor-timer)
@@ -258,7 +266,7 @@
 			    'chatgpt--monitor-process-sentinel))))
 
 (defun chatgpt--monitor-format-buffer ()
-  "Format the contents of the reply buffer."
+  "Format the contents of the response buffer."
   ;; Reformat list items.
   (chatgpt--replace-regexp "\n\n\\( *[0-9-] .+?\\)$" "\n\\1")
   ;; Remove emphasis.
@@ -271,8 +279,8 @@
 (defun chatgpt--monitor-process-sentinel (proc event)
   "Handle the completion EVENT of the monitor process PROC."
   (when (string-match-p "finished" event)
-    (let ((reply (chatgpt--extract-raw-reply)))
-      (if (string= reply chatgpt--last-raw-reply)
+    (let ((response (chatgpt--extract-raw-response)))
+      (if (string= response chatgpt--last-raw-response)
 	  ;; No update.
 	  (setq chatgpt--monitor-ntries (1+ chatgpt--monitor-ntries))
 	;; Updated.
@@ -282,53 +290,59 @@
 	  (with-current-buffer chatgpt--buffer-name
 	    (chatgpt--update-mode-name "streaming")
 	    (erase-buffer)
-	    (insert reply)
+	    (insert response)
 	    (shr-render-region (point-min) (point-max))
 	    (chatgpt--monitor-format-buffer))
 	  ;; Restore the window start and position.
-          (set-window-point win last-pnt)
-          (set-window-start win last-start))
-	(setq chatgpt--last-raw-reply reply)
+	  (when win
+            (set-window-point win last-pnt)
+            (set-window-start win last-start)))
+	(setq chatgpt--last-raw-response response)
 	(setq chatgpt--monitor-ntries 0))
-      (if (or (string-suffix-p "\nEOF\n" reply)
+      (if (or (string-suffix-p "\nEOF\n" response)
 	      (>= chatgpt--monitor-ntries 50)) ;; .2 seconds x 50 = 10 seconds.
 	  ;; Finished
-	  (chatgpt--query-finished)
+	  (chatgpt--response-finished)
 	;; Schedule the next event
 	(chatgpt--sched-monitor-event)))))
 
-(defun chatgpt--query-finished ()
-  "Handle the completion of a query."
+(defun chatgpt--response-finished ()
+  "Handle the completion of a prompt."
   (with-current-buffer chatgpt--buffer-name
     (chatgpt--update-mode-name "finished"))
-  (chatgpt--save-reply))
+  (chatgpt--save-response))
 
 ;; ---------------- User-level interfaces.
-(defun chatgpt-query (arg)
-  "Send a query to the AI."
+(defun chatgpt-send (arg)
+  "Send a prompt to the AI."
   (interactive "P")
   (let ((prefix "")
-	(query (chatgpt--find-query)))
+	(prompt (chatgpt--find-prompt)))
     (when (equal arg '(16))
       (setq prefix (chatgpt--read-prefix)))
     (when arg
-      (setq query (read-string (format "%s query: " chatgpt-engine) query)))
-    (chatgpt--send-query (concat prefix query))))
+      (setq prompt (read-string (format "%s prompt: " chatgpt-engine) prompt)))
+    ;; Expand the prompt with m4 macro processor.
+  (with-temp-buffer
+    (insert prompt)
+    (call-process-region (point-min) (point-max) "m4" t t)
+    (setq prompt (buffer-string)))
+  (chatgpt--send-prompt (concat prefix prompt))))
 
-(defun chatgpt-query-api (arg)
+(defun chatgpt-send-api (arg)
   (interactive "P")
   (let ((chatgpt-use-api t))
-    (chatgpt-query arg)))
+    (chatgpt-send arg)))
 
-(defun chatgpt-insert-reply (arg)
-  "Insert the latest reply from the AI. If ARG is non-nil, include the query."
+(defun chatgpt-insert-response (arg)
+  "Insert the latest response from the AI. If ARG is non-nil, include the prompt."
   (interactive "P")
-  (let ((reply (string-trim (chatgpt--extract-reply))))
+  (let ((response (string-trim (chatgpt--extract-response))))
     (if arg
 	(progn
-	  (insert "Q. " chatgpt--last-query "\n\n")
-	  (insert "A. " reply))
-      (insert reply))))
+	  (insert "Q. " chatgpt--last-prompt "\n\n")
+	  (insert "A. " response))
+      (insert response))))
 
 (defun chatgpt-fill ()
   "Guess a content that fits at the the point."
@@ -343,11 +357,11 @@ Do not add '> ' at the beginning of lines.
 
 ----
 ")
-	 (query (concat (substring buf 0 (1- pnt))
+	 (prompt (concat (substring buf 0 (1- pnt))
 			"__FILL_THIS_PART__"
 			(substring buf (1- pnt)))))
     (let ((chatgpt-use-api t))
-      (chatgpt--send-query (concat prefix query)))))
+      (chatgpt--send-prompt (concat prefix prompt)))))
 
 ;; (chatgpt-select-engine)
 (defun chatgpt-select-engine ()
@@ -363,5 +377,5 @@ Do not add '> ' at the beginning of lines.
             (?p "Copilot")
             (?e "Copilot-Enterprise")
             (_ chatgpt-engine)))))
-  
+
 (provide 'chatgpt)
