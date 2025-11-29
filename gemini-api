@@ -4,8 +4,6 @@
 # Copyright (c) 2025, Hiroyuki Ohsaki.
 # All rights reserved.
 #
-# $Id: gemini-chat,v 1.0 2025/11/27 12:00:00 ohsaki Exp $
-#
 
 import os
 import sys
@@ -26,8 +24,7 @@ INSTRUCTIONS = """\
 ユーザーの質問意図をくみ取り、
 論理的な文章を心がけてください。
 
-読者は情報工学分野で、
-ネットワークアーキテクチャを専門分野とする大学教員です。
+読者は情報工学分野の大学教員です。
 情報工学や情報ネットワークに関する基本的な事柄は説明する必要がありません。
 
 文章は自然な日本語で、
@@ -55,85 +52,63 @@ INSTRUCTIONS = """\
 
 def usage():
     die(f"""\
-usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s query]
+usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-i instr] [-s prompt]
   -v         verbose mode
   -c         compare mode (also display the reply from gemini-1.5-flash)
   -e engine  specify AI engine (default: gemini)
   -m model   specify LLM model (default: gemini-1.5-pro)
   -i instr   specify instructions
-  -s query   query string
+  -s prompt   prompt string
 """)
 
-def run_query(model_name,
+def send_prompt(model_name,
               instructions,
-              query,
+              prompt,
               max_output_tokens=8192,
-              temperature=0.0): # Gemini defaults are slightly different, explicit float usually safer
-    
+              temperature=0.):
     if verbose:
         print(f'[{model_name}]')
-
-    try:
-        # Configure the model with system instructions (system_instruction)
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=instructions
-        )
-
-        # Generation config
-        generation_config = genai.types.GenerationConfig(
-            max_output_tokens=max_output_tokens,
-            temperature=temperature,
-        )
-
-        # Safety settings (Blocking none to match typical dev use-cases, adjust as needed)
-        safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-        }
-
-        response = model.generate_content(
-            query,
-            generation_config=generation_config,
-            safety_settings=safety_settings,
-            stream=True
-        )
-
-        for chunk in response:
-            print(chunk.text, end='', flush=True)
-        print()
-
-    except Exception as e:
-        warn(f"Error occurred: {e}")
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        system_instruction=instructions
+    )
+    generation_config = genai.types.GenerationConfig(
+        max_output_tokens=max_output_tokens,
+        temperature=temperature,
+    )
+    safety_settings = {
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    }
+    response = model.generate_content(
+        prompt,
+        generation_config=generation_config,
+        safety_settings=safety_settings,
+        stream=True
+    )
+    for chunk in response:
+        print(chunk.text, end='', flush=True)
+    print()
 
 def main():
     global verbose
     opt = getopts('vce:m:i:s:') or usage()
     verbose = opt.v
     compare = opt.c
-    # engine = opt.e or 'gemini' # Not actively used but kept for arg compatibility
+    engine = opt.e or 'gemini'
     model = opt.m or 'gemini-2.5-flash'
     instructions = opt.i or INSTRUCTIONS
-    query = opt.s
+    prompt = opt.s if opt.s else sys.stdin.read().strip()
 
-    # Retrieve API Key from Environment Variable
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        die("Error: GOOGLE_API_KEY environment variable not set.")
-    
+    api_key = os.environ.get('GOOGLE_API_KEY')
     genai.configure(api_key=api_key)
+    send_prompt(model, instructions, prompt)
 
-    if query:
-        run_query(model, instructions, query)
-
-        if compare:
-            print('-' * 64)
-            # Use 2.5-flash as the fast comparison baseline
-            run_query('gemini-2.5-flash', instructions, query)
-    else:
-        usage()
+    if compare:
+        print('-' * 64)
+        send_prompt('gemini-2.5-flash', instructions, prompt)
 
 if __name__ == "__main__":
     main()
