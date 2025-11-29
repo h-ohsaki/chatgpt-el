@@ -9,9 +9,10 @@ import os
 import re
 import sys
 
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.genai import types
 from perlcompat import die, warn, getopts
+import google.genai as genai
+import tbdump
 
 # Model Name             Output   Input    Speed        Context
 # -----------------------------------------------------------------
@@ -19,6 +20,9 @@ from perlcompat import die, warn, getopts
 # gemini-2.5-flash       $0.20    $0.05    Fastest      2M
 # gemini-1.5-pro         $10.50   $3.50    Medium       2M
 # gemini-1.5-flash       $0.30    $0.075   Fast         2M
+# imagen-4.0-ultra-generate-001
+# imagen-4.0-generate-001
+# gemini-3-pro-image-preview
 
 INSTRUCTIONS = """\
 あなたは親切で信頼できる優秀な AI アドバイザです。
@@ -75,55 +79,122 @@ def expand_macros(astr):
     pattern = re.compile(r'\[\[(.+?)\]\]')
     return pattern.sub(_include, astr)
 
-def send_prompt(model_name,
+def send_prompt(client,
+                model_name,
                 instructions,
                 prompt,
                 max_output_tokens=8192,
                 temperature=0.):
     if verbose:
         print(f'[{model_name}]')
-    model = genai.GenerativeModel(model_name=model_name,
-                                  system_instruction=instructions)
-    generation_config = genai.types.GenerationConfig(
-        max_output_tokens=max_output_tokens,
+    config = types.GenerateContentConfig(
         temperature=temperature,
-    )
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HARASSMENT:
-        HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH:
-        HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT:
-        HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT:
-        HarmBlockThreshold.BLOCK_NONE,
-    }
-    response = model.generate_content(prompt,
-                                      generation_config=generation_config,
-                                      safety_settings=safety_settings,
-                                      stream=True)
-    for chunk in response:
-        print(chunk.text, end='', flush=True)
+        system_instruction=instructions,
+        safety_settings=[
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE),
+        ])
+    stream = client.models.generate_content_stream(model=model_name,
+                                                   contents=prompt,
+                                                   config=config)
+    for chunk in stream:
+        if chunk.text:
+            print(chunk.text, end='', flush=True)
     print()
+
+def generate_image(client, model_name, prompt, outfile):
+    if verbose:
+        print(f'[{model_name}]')
+    config = types.GenerateImagesConfig(number_of_images=1,
+                                        seed=1,
+                                        safety_filter_level='block_only_high',
+                                        include_rai_reason=True)
+    response = client.models.generate_images(model=model_name,
+                                             prompt=prompt,
+                                             config=config)
+    if response.generated_images:
+        image_data = response.generated_images[0].image.image_bytes
+        print(f'Writing as {outfile}...')
+        with open(outfile, 'wb') as f:
+            f.write(image_data)
+    else:
+        print(f'No images returned from model {model_name}.')
+
+def generate_image_via_gemini(client, model_name, prompt, outfile):
+    if verbose:
+        print(f'[{model_name}]')
+    safety_settings = [
+        types.SafetySetting(category=category, threshold='BLOCK_ONLY_HIGH')
+        for category in [
+            'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+            'HARM_CATEGORY_DANGEROUS_CONTENT', 'HARM_CATEGORY_HARASSMENT'
+        ]
+    ]
+    config = types.GenerateContentConfig(seed=1,
+                                         temperature=0.,
+                                         safety_settings=safety_settings)
+    response = client.models.generate_content(model=model_name,
+                                              contents=prompt,
+                                              config=config)
+    image_found = False
+    if response.candidates and response.candidates[0].content.parts:
+        for part in response.candidates[0].content.parts:
+            if part.inline_data:
+                print(f'Writing inline image to {outfile}...')
+                with open(outfile, 'wb') as f:
+                    f.write(part.inline_data.data)
+                image_found = True
+                break
+    if not image_found:
+        print(f'No inline image data found in response from {model_name}.')
+        if response.text:
+            print(f'Response text: {response.text}')
+
+def list_models(client):
+    for model in client.models.list():
+        name = model.name.replace('models/', '')
+        disp_name = model.display_name
+        methods = ', '.join(model.supported_actions or [])
+        print(f'{name}\t{disp_name}\t{methods}')
 
 def main():
     global verbose
-    opt = getopts('vce:m:i:s:') or usage()
+    opt = getopts('vlIm:i:s:O:') or usage()
     verbose = opt.v
-    compare = opt.c
-    engine = opt.e or 'gemini'
+    do_list = opt.l
+    gen_image = opt.I
     model = opt.m or 'gemini-2.5-flash'
     instructions = opt.i or INSTRUCTIONS
-    prompt = opt.s if opt.s else sys.stdin.read().strip()
-    prompt = expand_macros(prompt)
+    prompt = opt.s
+    outfile = opt.O or 'out.png'
 
     api_key = os.environ.get('GOOGLE_API_KEY')
-    genai.configure(api_key=api_key)
-    send_prompt(model, instructions, prompt)
+    client = genai.Client(api_key=api_key)
+    if do_list:
+        list_models(client)
+        exit()
 
-    if compare:
-        print('-' * 64)
-        send_prompt('gemini-2.5-flash', instructions, prompt)
+    if not prompt:
+        prompt = sys.stdin.read().strip()
+    prompt = expand_macros(prompt)
+
+    if gen_image:
+        if 'imagen' in model:
+            generate_image(client, model, prompt, outfile)
+        else:
+            generate_image_via_gemini(client, model, prompt, outfile)
+    else:
+        send_prompt(client, model, instructions, prompt)
 
 if __name__ == "__main__":
     main()
