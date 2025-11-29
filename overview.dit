@@ -5,19 +5,19 @@
 
               Emacs                                                  Chromium/Chrome
      +----------------------+   sending process               +--------------------------+
-     | hello                |                                 | ChatGPT                  |
+     | hello                |                                 | ChatGPT/Gemini/Claude... |
      |                      |                                 |                          |
      |                      +---+                             | how can I help you?      |
-     |                      |   | send query via -s           |                          |
+     |                      |   | send prompt via -s          |                          |
      +----------------------+   |                             |                          |
      | how can I help you?  |   |                             |     +--------------+     |
      |                      |   |        chatgpt-cdp          |     | hello        |     |
      |                      |   |     (Python script)         |     +--------------+     |
-     +----------------------+   |    +---------------+        +--------------------------+
-               ^                +--->| - talk CDP    |                      ^  localhost:9000
-               |                     | - parse HTML  |                      |
-               +---------------------| - watch reply |<---------------------+
-         receive reply from STDIN    |               |         CDP (Chromium DevTools Protocol)
-                via -r               +---------------+
+     +----------------------+   |    +----------------+       +--------------------------+
+               ^                +--->| talk CDP       |                     ^  localhost:9000
+               |                     | parse HTML     |                     |
+               +---------------------| watch response |<--------------------+
+         receive reply from STDIN    |                |         CDP (Chromium DevTools Protocol)
+                via -r               +----------------+
 
           receiving process
