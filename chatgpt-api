@@ -4,8 +4,6 @@
 # Copyright (c) 2025, Hiroyuki Ohsaki.
 # All rights reserved.
 #
-# $Id: chat,v 1.10 2025/07/15 08:23:32 ohsaki Exp $
-#
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,6 +34,7 @@ from perlcompat import die, warn, getopts
 # o4-mini		$4.4	R4	3	2024-06-01
 # o3			$8	R5	1	2024-06-01
 # gpt-4o	 	$10.0	3	3	2023-10-01
+# gpt-5.1               $10.0   4       4       2025-04-01
 # gpt-4-turbo  		$30.0	2	3	2023-12-01
 # o1			$60.0	R4	1	2023-10-01
 
@@ -44,8 +43,7 @@ INSTRUCTIONS = """\
 ユーザーの質問意図をくみ取り、
 論理的な文章を心がけてください。
 
-読者は情報工学分野で、
-ネットワークアーキテクチャを専門分野とする大学教員です。
+読者は情報工学分野の大学教員です。
 情報工学や情報ネットワークに関する基本的な事柄は説明する必要がありません。
 
 文章は自然な日本語で、
@@ -73,26 +71,26 @@ INSTRUCTIONS = """\
 
 def usage():
     die(f"""\
-usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s query]
+usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s prompt]
   -v         verbose mode
   -c         compare mode (also diplay the reply from gpt-4.1-mini)
   -e engine  specify AI engine (default: chatgpt)
   -m model   specify LLM model (default: gpt-4o-mini)
   -i instr   specify instructions
-  -s query   query string
+  -s prompt  prompt string
 """)
 
-def run_query(client,
+def send_prompt(client,
               model,
               instructions,
-              query,
-              max_output_tokens=8192,
+              prompt,
+              max_output_tokens=4096,
               temperature=0):
     print(f'[{model}]')
     stream = client.responses.create(
         model=model,
         instructions=instructions,
-        input=query,
+        input=prompt,
         stream=True,
         max_output_tokens=max_output_tokens,
         temperature=temperature,
@@ -112,15 +110,14 @@ def main():
     engine = opt.e or 'chatgpt'
     model = opt.m or 'gpt-4.1-mini'
     instructions = opt.i or INSTRUCTIONS
-    query = opt.s
+    prompt = opt.s if opt.s else sys.stdin.read().strip()
 
     client = OpenAI()
-    run_query(client, model, instructions, query)
+    send_prompt(client, model, instructions, prompt)
 
     if compare:
-        print(
-            '----------------------------------------------------------------')
-        run_query(client, 'gpt-4.1-mini', INSTRUCTIONS, query)
+        print('-' * 64)
+        send_prompt(client, 'gpt-4.1-mini', instructions, prompt)
 
 if __name__ == "__main__":
     main()
