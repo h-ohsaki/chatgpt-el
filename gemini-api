@@ -65,6 +65,7 @@ usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-i instr] [-s prompt]
 def expand_macros(astr):
     def _include(match):
         file = match.group(1).strip()
+        file = file.replace('~', os.getenv('HOME'))
         try:
             with open(file) as f:
                 return f.read()
