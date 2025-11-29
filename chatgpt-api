@@ -80,12 +80,24 @@ usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s prompt]
   -s prompt  prompt string
 """)
 
+def expand_macros(astr):
+    def _include(match):
+        file = match.group(1).strip()
+        try:
+            with open(file) as f:
+                return f.read()
+        except FileNotFoundError:
+            return match.group(0)
+
+    pattern = re.compile(r'\[\[(.+?)\]\]')
+    return pattern.sub(_include, astr)
+
 def send_prompt(client,
-              model,
-              instructions,
-              prompt,
-              max_output_tokens=4096,
-              temperature=0):
+                model,
+                instructions,
+                prompt,
+                max_output_tokens=4096,
+                temperature=0):
     print(f'[{model}]')
     stream = client.responses.create(
         model=model,
@@ -111,6 +123,7 @@ def main():
     model = opt.m or 'gpt-4.1-mini'
     instructions = opt.i or INSTRUCTIONS
     prompt = opt.s if opt.s else sys.stdin.read().strip()
+    prompt = expand_macros(prompt)
 
     client = OpenAI()
     send_prompt(client, model, instructions, prompt)
