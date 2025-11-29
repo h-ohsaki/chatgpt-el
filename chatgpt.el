@@ -114,6 +114,16 @@
     (while (re-search-forward regexp nil t)
       (replace-match newtext))))
 
+(defun chatgpt--expand-macros ()
+  (save-excursion
+    ;; Replace all [[FILE]] directives with the content of FILE.
+    (goto-char (point-min))
+    (while (re-search-forward "\\[\\[\\([^]]+\\)\\]\\]" nil t)
+      (let ((filename (match-string 1)))
+	(when (file-exists-p filename)
+	  (replace-match "")
+          (insert-file-contents filename))))))
+
 ;; ---------------- Low level interfaces
 (defun chatgpt--read-prefix ()
   "Prompt the user to select a prompt prefix."
@@ -148,6 +158,25 @@
     (setq prompt (replace-regexp-in-string "^Q\\. *" "" prompt))
     prompt))
 
+;; Start web browser if not running.
+(defun chatgpt--start-browser ()
+  (unless chatgpt-use-api
+    (let ((pid (string-trim (shell-command-to-string
+			     (format "pgrep %s" chatgpt-browser-prog)))))
+      (when (string-empty-p pid)
+	(apply 'start-process
+	       chatgpt-browser-prog nil
+	       chatgpt-browser-prog
+	       chatgpt-browser-args)
+	(let ((connected nil))
+	  (while (not connected)
+	    (condition-case nil
+		(let ((proc (open-network-stream "chatgpt" nil "localhost" 9001)))
+		  (setq connected t)
+		  (delete-process proc))
+	      (error
+	       (sleep-for .5)))))))))
+
 (defun chatgpt--send-prompt (prompt)
   "Send prompt PROMPT to the AI."
   (chatgpt--init)
@@ -156,16 +185,7 @@
   ;; Stop the process if already running.
   (when (memq chatgpt--process (process-list))
     (kill-process chatgpt--process))
-  ;; Start web browser if not running.
-  (unless chatgpt-use-api
-    (let ((pid (string-trim
-		(shell-command-to-string (format "pgrep %s" chatgpt-browser-prog)))))
-      (when (string-empty-p pid)
-	(apply 'start-process
-	       chatgpt-browser-prog nil
-	       chatgpt-browser-prog
-	       chatgpt-browser-args)
-	(sleep-for 3.))))
+  (chatgpt--start-browser)
   (let ((prog (if chatgpt-use-api chatgpt-prog-api chatgpt-prog)))
     (setq chatgpt--process
 	  (start-process "ChatGPT" chatgpt--buffer-name
@@ -322,12 +342,11 @@
       (setq prefix (chatgpt--read-prefix)))
     (when arg
       (setq prompt (read-string (format "%s prompt: " chatgpt-engine) prompt)))
-    ;; Expand the prompt with m4 macro processor.
-  (with-temp-buffer
-    (insert prompt)
-    (call-process-region (point-min) (point-max) "m4" t t)
-    (setq prompt (buffer-string)))
-  (chatgpt--send-prompt (concat prefix prompt))))
+    (with-temp-buffer
+      (insert prompt)
+      (chatgpt--expand-macros)
+      (setq prompt (buffer-string)))
+    (chatgpt--send-prompt (concat prefix prompt))))
 
 (defun chatgpt-send-api (arg)
   (interactive "P")
