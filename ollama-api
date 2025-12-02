@@ -1,0 +1,23 @@
+#!/bin/sh
+
+while getopts 've:m:i:s:' var
+do
+    case $var in
+	v) verbose=1;;
+	e) engine=$OPTARG;;
+	m) model=$OPTARG;;
+	i) inst=$OPTARG;;
+	s) prompt=$OPTARG;;
+    esac
+done
+shift `expr $OPTIND - 1`
+
+[ -n "$prompt" ] || prompt=$(cat -)
+
+json=$(jq -n --arg prompt "$prompt" '{model: "deepseek-jp", prompt: $prompt, stream: true}')
+
+curl -s http://localhost:11434/api/generate \
+  -H "Content-Type: application/json" \
+  -d "$json" \
+| jq -r --unbuffered 'select(.response) | .response' \
+| stdbuf -i 0 -o 0 tr -d '\n'
