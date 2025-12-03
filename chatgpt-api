@@ -18,6 +18,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
+import re
 import sys
 
 from openai import OpenAI
@@ -83,6 +85,7 @@ usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s prompt]
 def expand_macros(astr):
     def _include(match):
         file = match.group(1).strip()
+        file = file.replace('~', os.getenv('HOME'))
         try:
             with open(file) as f:
                 return f.read()
@@ -96,7 +99,7 @@ def send_prompt(client,
                 model,
                 instructions,
                 prompt,
-                max_output_tokens=4096,
+                max_output_tokens=8192,
                 temperature=0):
     print(f'[{model}]')
     stream = client.responses.create(
@@ -116,10 +119,8 @@ def send_prompt(client,
     print()
 
 def main():
-    opt = getopts('vce:m:i:s:') or usage()
+    opt = getopts('vlIe:m:i:s:O:') or usage()
     verbose = opt.v
-    compare = opt.c
-    engine = opt.e or 'chatgpt'
     model = opt.m or 'gpt-4.1-mini'
     instructions = opt.i or INSTRUCTIONS
     prompt = opt.s if opt.s else sys.stdin.read().strip()
@@ -127,10 +128,6 @@ def main():
 
     client = OpenAI()
     send_prompt(client, model, instructions, prompt)
-
-    if compare:
-        print('-' * 64)
-        send_prompt(client, 'gpt-4.1-mini', instructions, prompt)
 
 if __name__ == "__main__":
     main()
