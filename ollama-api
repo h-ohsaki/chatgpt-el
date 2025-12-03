@@ -1,23 +1,109 @@
-#!/bin/sh
+#!/usr/bin/env python3
+#
+# A simple ChatGPT client using OpenAI module.
+# Copyright (c) 2025, Hiroyuki Ohsaki.
+# All rights reserved.
+#
 
-while getopts 've:m:i:s:' var
-do
-    case $var in
-	v) verbose=1;;
-	e) engine=$OPTARG;;
-	m) model=$OPTARG;;
-	i) inst=$OPTARG;;
-	s) prompt=$OPTARG;;
-    esac
-done
-shift `expr $OPTIND - 1`
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
 
-[ -n "$prompt" ] || prompt=$(cat -)
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 
-json=$(jq -n --arg prompt "$prompt" '{model: "deepseek-jp", prompt: $prompt, stream: true}')
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-curl -s http://localhost:11434/api/generate \
-  -H "Content-Type: application/json" \
-  -d "$json" \
-| jq -r --unbuffered 'select(.response) | .response' \
-| stdbuf -i 0 -o 0 tr -d '\n'
+import json
+import os
+import re
+import requests
+import sys
+
+from perlcompat import die, warn, getopts
+import tbdump
+
+INSTRUCTIONS = """\
+あなたは親切で信頼できる優秀な AI アドバイザです。
+ユーザーの質問意図をくみ取り、
+論理的な文章を心がけてください。
+
+読者は情報工学分野の大学教員です。
+情報工学や情報ネットワークに関する基本的な事柄は説明する必要がありません。
+
+文章は自然な日本語で、
+必要に応じて段落や箇条書き、
+表現の工夫 (例や補足) を使って Markdown 形式で説明してください。
+不要な繰り返しは避けながら、
+有益な情報をできるだけ多く提供してください。
+
+専門用語には元となる英語を括弧書きで表記してください。
+
+事実やエビデンスを重視して回答してください。
+最新の研究やデータに基づいた情報を提供してください。
+事実に関する質問に答える際、
+自身の知識だけで 100% の確信が持てない場合は、
+決して推測で答えないでください。
+代わりに「情報が確認できなかった」と答えてください。
+
+誤解されることが多い概念には、
+どのように誤解されることが多いか例とともに示してください。
+
+もし可能であれば、
+より深く学ぶために役立つと思われる、
+周辺情報や、エピソード、類似した概念との関係性を説明してください。
+"""
+
+def usage():
+    die(f"""\
+usage: {sys.argv[0]} [-v] [-e engine] [-m model] [-s prompt]
+  -v         verbose mode
+  -e engine  specify AI engine (default: ollama)
+  -m model   specify LLM model (default: qwen2.5-inst)
+  -i instr   specify instructions
+  -s prompt  prompt string
+""")
+
+def expand_macros(astr):
+    def _include(match):
+        file = match.group(1).strip()
+        file = file.replace('~', os.getenv('HOME'))
+        try:
+            with open(file) as f:
+                return f.read()
+        except FileNotFoundError:
+            return match.group(0)
+
+    pattern = re.compile(r'\[\[(.+?)\]\]')
+    return pattern.sub(_include, astr)
+
+def main():
+    opt = getopts('ve:m:i:s:') or usage()
+    verbose = opt.v
+    model = opt.m if opt.m else 'qwen2.5-inst'
+    instructions = opt.i or INSTRUCTIONS
+    prompt = opt.s if opt.s else sys.stdin.read().strip()
+    prompt = expand_macros(prompt)
+
+    payload = {'model': model, 'system': '', 'prompt': prompt, 'stream': True}
+    response = requests.post('http://vcserv:11434/api/generate',
+                             json=payload,
+                             stream=True,
+                             headers={'Content-Type': 'application/json'})
+    response.raise_for_status()
+
+    for line in response.iter_lines(decode_unicode=True):
+        if line:
+            line = line.replace(b'\\n', b'__NEWLINE__')
+            data = json.loads(line)
+            if 'response' in data:
+                token = data['response']
+                token = token.replace('__NEWLINE__', '\n')
+                print(token, end='')
+
+if __name__ == "__main__":
+    main()
