@@ -81,15 +81,17 @@ def expand_macros(astr):
     pattern = re.compile(r'\[\[(.+?)\]\]')
     return pattern.sub(_include, astr)
 
-def main():
-    opt = getopts('ve:m:i:s:') or usage()
-    verbose = opt.v
-    model = opt.m if opt.m else 'qwen2.5-inst'
-    instructions = opt.i or INSTRUCTIONS
-    prompt = opt.s if opt.s else sys.stdin.read().strip()
-    prompt = expand_macros(prompt)
-
-    payload = {'model': model, 'system': '', 'prompt': prompt, 'stream': True}
+def send_prompt(model,
+                instructions,
+                prompt,
+                max_output_tokens=8192,
+                temperature=.1):
+    print(f'[{model}]', flush=True)
+    payload = {
+        'model': model, 'system': '', 'prompt': prompt, 'stream': True,
+        'num_predict': max_output_tokens, 'options':
+        {'temperature': temperature}
+    }
     response = requests.post('http://vcserv:11434/api/generate',
                              json=payload,
                              stream=True,
@@ -103,7 +105,18 @@ def main():
             if 'response' in data:
                 token = data['response']
                 token = token.replace('__NEWLINE__', '\n')
-                print(token, end='')
+                print(token, end='', flush=True)
+    print()
+
+def main():
+    opt = getopts('ve:m:i:s:') or usage()
+    verbose = opt.v
+    model = opt.m if opt.m else 'qwen2.5-inst'
+    instructions = opt.i or INSTRUCTIONS
+    prompt = opt.s if opt.s else sys.stdin.read().strip()
+    prompt = expand_macros(prompt)
+
+    send_prompt(model, instructions, prompt)
 
 if __name__ == "__main__":
     main()
