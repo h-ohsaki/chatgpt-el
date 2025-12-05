@@ -109,7 +109,7 @@ def wait_until_visible(ws, selector):
 
 def open_wsocket(config):
     # Identify the first page.
-    resp = requests.get('http://127.0.0.1:9001/json/list',
+    resp = requests.get('http://127.0.0.1:9000/json/list',
                         timeout=DEFAULT_TIMEOUT)
     pages = [elem for elem in resp.json() if elem['type'] == 'page']
     for page in pages:
