@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# A simple ChatGPT client using OpenAI module.
+# A simple ChatGPT/Gemini/Ollama client using API.
 # Copyright (c) 2025, Hiroyuki Ohsaki.
 # All rights reserved.
 #
@@ -18,27 +18,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import json
 import os
 import re
+import requests
 import sys
 
-from openai import OpenAI
 from perlcompat import die, warn, getopts
-# import tbdump
+import google.genai
+import openai
+import tbdump
 
-#                       Output	Intel	Speed	Cutoff
-# gpt-4.1-nano 		$0.40	2	5	2024-06-01
-# gpt-4o-mini  		$0.60	2	4	2023-10-01
-# gpt-3.5-turbo		$1.50	1	2	2021-09-01
-# gpt-4.1-mini 		$1.60	3	4	2024-06-01
-# o1-mini		$4.4	R3	2	2023-10-01
-# o3-mini		$4.4	R4	3	2024-10-01
-# o4-mini		$4.4	R4	3	2024-06-01
-# o3			$8	R5	1	2024-06-01
-# gpt-4o	 	$10.0	3	3	2023-10-01
-# gpt-5.1               $10.0   4       4       2025-04-01
-# gpt-4-turbo  		$30.0	2	3	2023-12-01
-# o1			$60.0	R4	1	2023-10-01
+OLLAMA_URL = 'http://vcserv:11434/api/generate'
 
 INSTRUCTIONS = """\
 あなたは親切で信頼できる優秀な AI アドバイザです。
@@ -73,61 +64,250 @@ INSTRUCTIONS = """\
 
 def usage():
     die(f"""\
-usage: {sys.argv[0]} [-vc] [-e engine] [-m model] [-s prompt]
+usage: {sys.argv[0]} [-vl] [-e engine] [-m model] [-i inst] [-s prompt] [-O path]
   -v         verbose mode
-  -c         compare mode (also diplay the reply from gpt-4.1-mini)
-  -e engine  specify AI engine (default: chatgpt)
-  -m model   specify LLM model (default: gpt-4o-mini)
-  -i instr   specify instructions
+  -l         list available modes
+  -e engine  specify engine (default: ollama)
+  -m model   specify LLM model (default: qwen-2.5:14b)
+  -i inst    specify system instructions
   -s prompt  prompt string
+  -O path    output image filename
 """)
 
-def expand_macros(astr):
-    def _include(match):
-        file = match.group(1).strip()
-        file = file.replace('~', os.getenv('HOME'))
-        try:
-            with open(file) as f:
-                return f.read()
-        except FileNotFoundError:
-            return match.group(0)
+# Ollama ----------------------------------------------------------------
+class Ollama:
+    def __init__(self, model=None, inst='', max_tokens=8192, temp=0.):
+        if model is None:
+            model = 'qwen2.5:14b'
+        self.model = model
+        self.inst = inst
+        self.max_tokens = max_tokens
+        self.temp = temp
 
-    pattern = re.compile(r'\[\[(.+?)\]\]')
-    return pattern.sub(_include, astr)
+    def expand_macros(self, astr):
+        def _include(match):
+            file = match.group(1).strip()
+            file = file.replace('~', os.getenv('HOME'))
+            try:
+                with open(file) as f:
+                    return f.read()
+            except FileNotFoundError:
+                return match.group(0)
 
-def send_prompt(client,
-                model,
-                instructions,
-                prompt,
-                max_output_tokens=8192,
-                temperature=0):
-    print(f'[{model}]')
-    stream = client.responses.create(
-        model=model,
-        instructions=instructions,
-        input=prompt,
-        stream=True,
-        max_output_tokens=max_output_tokens,
-        temperature=temperature,
-    )
-    for event in stream:
-        try:
-            delta = event.delta
-            print(delta, end='', flush=True)
-        except AttributeError:
-            pass
-    print()
+        pattern = re.compile(r'\[\[(.+?)\]\]')
+        return pattern.sub(_include, astr)
+
+    def list_models(self):
+        print("""\
+model                 size
+deepseek-coder-v2     8.9 GB
+deepseek-r1:8b        5.2 GB
+llama3.1:8b           4.9 GB
+phi4                  9.1 GB
+qwen2.5-coder:7b      4.7 GB
+qwen2.5:14b           9.0 GB
+qwen2.5:7b            4.7 GB""")
+
+    def send_prompt(self, prompt):
+        print(f'[{self.model}]', flush=True)
+        prompt = self.expand_macros(prompt)
+        payload = {
+            'model': self.model, 'system': self.inst, 'prompt': prompt,
+            'stream': True, 'num_predict': self.max_tokens, 'options':
+            {'temperature': self.temp}
+        }
+        response = requests.post(OLLAMA_URL,
+                                 json=payload,
+                                 stream=True,
+                                 headers={'Content-Type': 'application/json'})
+        response.raise_for_status()
+
+        for line in response.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            line = line.replace(b'\\n', b'__NEWLINE__')
+            data = json.loads(line)
+            if 'response' in data:
+                token = data['response']
+                token = token.replace('__NEWLINE__', '\n')
+                print(token, end='', flush=True)
+        print()
+
+# ChatGPT ----------------------------------------------------------------
+class ChatGPT(Ollama):
+    def __init__(self, model=None, *args, **kwargs):
+        if model is None:
+            model = 'gpt-4.1-mini'
+        super().__init__(model=model, *args, **kwargs)
+        self.client = openai.OpenAI()
+
+    def list_models(self):
+        print("""\
+model          output  intel  speed  cutoff
+gpt-4.1-nano   $0.4    2      5      2024-06-01
+gpt-4o-mini    $0.6    2      4      2023-10-01
+gpt-3.5-turbo  $1.5    1      2      2021-09-01
+gpt-4.1-mini   $1.6    3      4      2024-06-01
+o1-mini        $4.4    R3     2      2023-10-01
+o3-mini        $4.4    R4     3      2024-10-01
+o4-mini        $4.4    R4     3      2024-06-01
+o3             $8      R5     1      2024-06-01
+gpt-4o         $10     3      3      2023-10-01
+gpt-5.1        $10     4      4      2025-04-01
+gpt-4-turbo    $30     2      3      2023-12-01
+o1             $60     R4     1      2023-10-01""")
+
+    def send_prompt(self, prompt):
+        print(f'[{self.model}]')
+        prompt = self.expand_macros(prompt)
+        stream = self.client.responses.create(
+            model=self.model,
+            instructions=self.inst,
+            input=prompt,
+            stream=True,
+            max_output_tokens=self.max_tokens,
+            temperature=self.temp,
+        )
+        for event in stream:
+            try:
+                delta = event.delta
+                print(delta, end='', flush=True)
+            except AttributeError:
+                pass
+        print()
+
+# Gemini ----------------------------------------------------------------
+class Gemini(Ollama):
+    def __init__(self, model=None, *args, **kwargs):
+        if model is None:
+            model = 'gemini-2.5-flash'
+        super().__init__(model=model, *args, **kwargs)
+        api_key = os.environ.get('GOOGLE_API_KEY')
+        self.client = google.genai.Client(api_key=api_key)
+
+    def list_all_models(self):
+        for model in self.client.models.list():
+            # Clean up model name for display (remove 'models/' prefix).
+            name = model.name.replace('models/', '')
+            disp_name = model.display_name
+            methods = ', '.join(model.supported_actions or [])
+            print(f'{name}\t{disp_name}\t{methods}')
+
+    def list_models(self):
+        print("""\
+model                          output   input    speed        context
+gemini-2.5-flash               $0.2     $0.05    Fastest      2M
+gemini-1.5-flash               $0.3     $0.075   Fast         2M
+gemini-1.5-pro                 $10.5    $3.5     Medium       2M
+gemini-3-pro-preview           $12      $2       Variable*    1M
+
+imagen-4.0-generate-001        $0.04    n/a      n/a          n/a
+imagen-4.0-ultra-generate-001  $0.06    n/a      n/a          n/a
+gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
+
+    def _safety_settings(self):
+        setting = google.genai.types.SafetySetting
+        category = google.genai.types.HarmCategory
+        thresh_none = google.genai.types.HarmBlockThreshold.BLOCK_NONE
+        safety_settings = [
+            setting(category=category.HARM_CATEGORY_HARASSMENT,
+                    threshold=thresh_none),
+            setting(category=category.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=thresh_none),
+            setting(category=category.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=thresh_none),
+            setting(category=category.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=thresh_none),
+        ]
+        return safety_settings
+
+    def _send_prompt(self, prompt):
+        # Configure generation parameters including safety settings.
+        # We explicitly set all safety thresholds to BLOCK_NONE to minimize filtering.
+        config = google.genai.types.GenerateContentConfig(
+            temperature=self.temp,
+            system_instruction=self.inst,
+            safety_settings=self._safety_settings())
+
+        # Use streaming to display the response incrementally as it is generated.
+        stream = self.client.models.generate_content_stream(model=self.model,
+                                                            contents=prompt,
+                                                            config=config)
+        for chunk in stream:
+            if chunk.text:
+                print(chunk.text, end='', flush=True)
+        print()
+
+    def _generate_image_imagen(self, prompt, outfile):
+        config = google.genai.types.GenerateImagesConfig(
+            number_of_images=1,
+            safety_filter_level='block_low_and_above',
+            include_rai_reason=True)
+        response = self.client.models.generate_images(model=self.model,
+                                                      prompt=prompt,
+                                                      config=config)
+        if response.generated_images:
+            image_data = response.generated_images[0].image.image_bytes
+            print(f'Writing image to {outfile}...')
+            with open(outfile, 'wb') as f:
+                f.write(image_data)
+        else:
+            print(f'No images returned from model {self.model}.')
+            if response.text:
+                print(f'Response text: {response.text}')
+
+    def _generate_image_gemini(self, prompt, outfile):
+        config = google.genai.types.GenerateContentConfig(
+            temperature=self.temp, safety_settings=self._safety_settings())
+        response = self.client.models.generate_content(model=self.model,
+                                                       contents=prompt,
+                                                       config=config)
+
+        image_found = False
+        # Parse the response to find any inline binary data (images).
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.inline_data:
+                    print(f'Writing inline image to {outfile}...')
+                    with open(outfile, 'wb') as f:
+                        f.write(part.inline_data.data)
+                    image_found = True
+                    break
+
+        if not image_found:
+            print(f'No inline image returned from model {self.model}.')
+            if response.text:
+                print(f'Response text: {response.text}')
+
+    def send_prompt(self, prompt, outfile='out.png'):
+        print(f'[{self.model}]')
+        prompt = self.expand_macros(prompt)
+        if 'imagen' in self.model:
+            self._generate_image_imagen(prompt, outfile)
+        elif 'image' in self.model:
+            self._generate_image_gemini(prompt, outfile)
+        else:
+            self._send_prompt(prompt)
+
+ENGINES = {'ollama': Ollama, 'chatgpt': ChatGPT, 'gemini': Gemini}
 
 def main():
-    opt = getopts('vlIe:m:i:s:O:') or usage()
+    opt = getopts('vle:m:i:s:O:') or usage()
     verbose = opt.v
-    model = opt.m or 'gpt-4.1-mini'
-    instructions = opt.i or INSTRUCTIONS
-    prompt = opt.s if opt.s else sys.stdin.read().strip()
-    prompt = expand_macros(prompt)
+    do_list = opt.l
+    engine = opt.e.lower() if opt.e else 'ollama'
+    model = opt.m
+    inst = opt.i or INSTRUCTIONS
+    prompt = opt.s
 
-    client = OpenAI()
-    send_prompt(client, model, instructions, prompt)
+    cls_ = ENGINES[engine]
+    client = cls_(model=model, inst=inst)
+    if do_list:
+        client.list_models()
+    else:
+        if not prompt:
+            prompt = sys.stdin.read().strip()
+        client.send_prompt(prompt)
 
 if __name__ == "__main__":
     main()
