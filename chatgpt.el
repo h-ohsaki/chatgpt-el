@@ -1,6 +1,6 @@
 ;; -*- Emacs-Lisp -*-
 ;;
-;; Interactively access AIs from Emacs with/without APIs.
+;; Interactively access generative AIs from Emacs with/without APIs.
 ;; Copyright (C) 2023-2025 Hiroyuki Ohsaki.
 ;; All rights reserved.
 ;;
@@ -42,14 +42,14 @@
 ;; C-c E          Select AI engine.
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp")
-;; (defvar chatgpt-prog-api "~/src/chatgpt-el/chatgpt-api")
-(defvar chatgpt-prog-api "~/src/chatgpt-el/gemini-api")
-(defvar chatgpt-engine "Gemini")
+(defvar chatgpt-engine "chatgpt")
+(defvar chatgpt-api-prog "~/src/chatgpt-el/chatgpt-api")
+(defvar chatgpt-api-engine "ollama")
 ;; (defvar chatgpt-browser-prog "chromium")
 ;; (defvar chatgpt-browser-args '("--remote-debugging-port=9000"
 ;; 			       "--remote-allow-origins=http://127.0.0.1:9000"))
 (defvar chatgpt-browser-prog "qutebrowser")
-(defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9001"))
+(defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9000"))
 (defvar chatgpt-use-api nil)
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
@@ -82,8 +82,8 @@
     ("\".+?\"" . font-lock-string-face)
     ("'.+?'" . font-lock-string-face)))
 
-(defvar chatgpt--buffer-name "*ChatGPT response*")
-(defvar chatgpt--raw-buffer-name "*ChatGPT raw*")
+(defvar chatgpt--buffer-name "*AI response*")
+(defvar chatgpt--raw-buffer-name "*AI raw*")
 (defvar chatgpt--last-prompt nil)
 (defvar chatgpt--last-raw-response nil)
 (defvar chatgpt--process nil)
@@ -94,9 +94,10 @@
 ;; ---------------- Utils
 (defun chatgpt--update-mode-name (status)
   "Update the mode name to reflect the current status."
-  (setq mode-name (format "%s%s:%s"
-			  chatgpt-engine
-			  (if chatgpt-use-api "_API" "")
+  (setq mode-name (format "%s:%s"
+			  (if chatgpt-use-api
+			      (concat chatgpt-api-engine "-api")
+			    chatgpt-engine)
 			  status)))
 
 (defun chatgpt-mode ()
@@ -105,8 +106,7 @@
   (kill-all-local-variables)
   (setq major-mode 'chatgpt-mode)
   (setq font-lock-defaults '(chatgpt-font-lock-keywords 'keywords-only nil))
-  (font-lock-mode 1)
-  (visual-line-mode 1))
+  (font-lock-mode 1))
 
 (defun chatgpt--replace-regexp (regexp newtext)
   "Replace REGEXP with NEWTEXT in the current buffer."
@@ -172,7 +172,7 @@
 	(let ((connected nil))
 	  (while (not connected)
 	    (condition-case nil
-		(let ((proc (open-network-stream "chatgpt" nil "localhost" 9001)))
+		(let ((proc (open-network-stream "chatgpt" nil "localhost" 9000)))
 		  (setq connected t)
 		  (delete-process proc))
 	      (error
@@ -187,10 +187,14 @@
   (when (memq chatgpt--process (process-list))
     (kill-process chatgpt--process))
   (chatgpt--start-browser)
-  (let ((prog (if chatgpt-use-api chatgpt-prog-api chatgpt-prog)))
+  (let ((engine chatgpt-engine)
+	(prog chatgpt-prog))
+    (if chatgpt-use-api
+	(setq engine chatgpt-api-engine
+	      prog chatgpt-api-prog))
     (setq chatgpt--process
-	  (start-process "ChatGPT" chatgpt--buffer-name
-			 prog "-e" chatgpt-engine "-s" prompt)))
+	  (start-process engine chatgpt--buffer-name
+			 prog "-e" engine "-s" prompt)))
   (set-process-filter chatgpt--process 'chatgpt--process-filter)
   (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
   (setq chatgpt--last-prompt prompt))
@@ -388,14 +392,15 @@ Do not add '> ' at the beginning of lines.
   "Change the AI engine."
   (interactive)
   (let ((ch (read-char-from-minibuffer
-	     "Select engine (c:ChatGPT, g:Gemini, l:Claude, p:Copilot, e:Copilot-Enterprise): ")))
+	     "Select engine (c:chatgpt, g:gemini, o:ollama, l:claude, p:copilot, e:copilot-enterprise): ")))
     (setq chatgpt-engine
           (pcase ch
-            (?c "ChatGPT")
-            (?g "Gemini")
-            (?l "Claude")
-            (?p "Copilot")
-            (?e "Copilot-Enterprise")
+            (?c "chatgpt")
+            (?g "gemini")
+            (?o "ollama")
+            (?l "claude")
+            (?p "copilot")
+            (?e "copilot-enterprise")
             (_ chatgpt-engine)))))
 
 (provide 'chatgpt)
