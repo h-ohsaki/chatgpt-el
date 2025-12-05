@@ -32,10 +32,10 @@
 ;;; User Configuration
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp")
-(defvar chatgpt-engine "gemini")
+(defvar chatgpt-default-engine "gemini")
 
 (defvar chatgpt-api-prog "~/src/chatgpt-el/chatgpt-api")
-(defvar chatgpt-api-engine "ollama")
+(defvar chatgpt-default-api-engine "ollama")
 
 (defvar chatgpt-browser-prog "qutebrowser")
 (defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9000"))
@@ -64,10 +64,12 @@
 
 ;;; Internal Variables (Buffer Local)
 
+(defvar chatgpt--last-buf nil)
 ;; Make variables buffer-local to support parallel execution across different buffers.
+(defvar-local chatgpt--engine nil)
 (defvar-local chatgpt--use-api nil)
 (defvar-local chatgpt--process nil)
-(defvar-local chatgpt--last-prompt nil)
+(defvar-local chatgpt--prompt nil)
 (defvar-local chatgpt--monitor-process nil)
 (defvar-local chatgpt--monitor-timer nil)
 (defvar-local chatgpt--monitor-ntries 0)
@@ -96,10 +98,9 @@
 
 (defun chatgpt--update-mode-name (status)
   "Update the mode name to reflect the current status."
-  (setq mode-name (format "%s:%s"
-                          (if chatgpt--use-api
-                              (concat chatgpt-api-engine "-api")
-                            chatgpt-engine)
+  (setq mode-name (format "%s%s:%s"
+			  chatgpt--engine
+                          (if chatgpt--use-api "-api" "")
                           status))
   (force-mode-line-update))
 
@@ -123,7 +124,7 @@
     (with-current-buffer buf
       (chatgpt-mode)
       ;; Set local variables specific to this execution context.
-      (setq chatgpt-engine engine)
+      (setq chatgpt--engine engine)
       (setq chatgpt--use-api use-api)
       (chatgpt--update-mode-name "streaming")
       (erase-buffer)
@@ -185,28 +186,28 @@
 
 ;;; Process Handling (Send & Receive)
 
-(defun chatgpt--send-prompt (prompt use-api)
+(defun chatgpt--send-prompt (prompt engine use-api)
   "Send PROMPT to the AI using specified configuration."
-  (let* ((engine (if use-api chatgpt-api-engine chatgpt-engine))
-         (buf (chatgpt--init-buffer engine use-api)))
-    
+  (let ((buf (chatgpt--init-buffer engine use-api)))
+
     (with-current-buffer buf
       (chatgpt--stop-monitor) ;; Stop existing monitor in THIS buffer
       (chatgpt--start-monitor)
-      
+
       (when (and chatgpt--process (process-live-p chatgpt--process))
         (kill-process chatgpt--process))
-      
+
       (chatgpt--start-browser)
-      
+
       (let* ((prog (if use-api chatgpt-api-prog chatgpt-prog))
              (args (list "-e" engine "-s" prompt)))
         (setq chatgpt--process
               (apply 'start-process engine buf prog args)))
-      
+
       (set-process-filter chatgpt--process 'chatgpt--process-filter)
       (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
-      (setq chatgpt--last-prompt prompt))))
+      (setq chatgpt--prompt prompt)
+      (setq chatgpt--last-buf buf))))
 
 (defun chatgpt--process-filter (proc string)
   "Process the output STRING from the process PROC."
@@ -235,16 +236,16 @@
 
 (defun chatgpt--save ()
   "Save the last prompt and response."
-  (when chatgpt--last-prompt
-    (let* ((save-silently t)
-           (base (format-time-string "~/var/log/chatgpt/%y%m%d-%H%M%S"))
-           (response (buffer-string)))
+  (let* ((save-silently t)
+         (base (format-time-string "~/var/log/chatgpt/%y%m%d-%H%M%S"))
+	 (prompt chatgpt--prompt)
+	 (response (buffer-string)))
       (with-temp-buffer
-        (insert chatgpt--last-prompt)
+        (insert prompt)
         (write-region (point-min) (point-max) (concat base ".pt")))
       (with-temp-buffer
         (insert response)
-        (write-region (point-min) (point-max) (concat base ".rs"))))))
+        (write-region (point-min) (point-max) (concat base ".rs")))))
 
 ;;; Monitor (Polling) Implementation
 
@@ -272,11 +273,12 @@
   "Monitor the response from the AI."
   (when (buffer-live-p buf)
     (with-current-buffer buf
-      (let ((raw-buf (chatgpt--get-buffer-create chatgpt-engine nil t)))
+      (let ((raw-buf (chatgpt--get-buffer-create chatgpt--engine nil t))
+	    (engine chatgpt--engine))
         (with-current-buffer raw-buf
           (erase-buffer)
           (let ((proc (start-process "chatgpt-monitor" raw-buf
-                                     chatgpt-prog "-e" chatgpt-engine "-r")))
+                                     chatgpt-prog "-e" engine "-r")))
             ;; Save the target response buffer in the process object for the sentinel
             (process-put proc 'target-buffer buf)
             (set-process-sentinel proc 'chatgpt--monitor-process-sentinel)))))))
@@ -312,7 +314,7 @@
                   (set-window-start win last-start))
                 (setq chatgpt--last-raw-response response)
                 (setq chatgpt--monitor-ntries 0)))
-            
+
             (if (or (string-suffix-p "\nEOF\n" response)
                     (>= chatgpt--monitor-ntries 50))
                 (chatgpt--response-finished)
@@ -320,45 +322,39 @@
 
 ;;; Interactive Commands
 
-(defun chatgpt-send (arg)
+(defun chatgpt-send (arg &optional use-api)
   "Send a prompt to the AI. With C-u, edit prompt. With C-u C-u, select
 prefix."
   (interactive "P")
   (let ((prefix "")
+	(engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
         (prompt (chatgpt--find-prompt)))
     (when (equal arg '(16))
       (let* ((ch (read-char "Select [w]hat/[s]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[R]efactor: "))
              (entry (assoc ch chatgpt-prefix-alist)))
         (setq prefix (cdr entry))))
     (when arg
-      (setq prompt (read-string (format "%s prompt: " chatgpt-engine) prompt)))
-    
+      (setq prompt (read-string (format "%s prompt: " engine) prompt)))
+
     (with-temp-buffer
       (insert prompt)
       (chatgpt--expand-macros)
       (setq prompt (buffer-string)))
     
-    (chatgpt--send-prompt (concat prefix prompt) chatgpt--use-api)))
+    (chatgpt--send-prompt (concat prefix prompt) engine use-api)))
 
 (defun chatgpt-send-api (arg)
   (interactive "P")
-  (let ((chatgpt--use-api t))
-    (chatgpt-send arg)))
+  (chatgpt-send arg t))
 
 (defun chatgpt-insert-response (&optional arg)
-  "Insert the latest response.  If the current buffer is a ChatGPT response
-buffer, use it.  Otherwise, try to find the most recent response buffer
-for the current engine."
+  "Insert the latest response."
   (interactive "P")
-  (let* ((buf (if (derived-mode-p 'chatgpt-mode)
-                         (current-buffer)
-                       (get-buffer (chatgpt--buffer-name 
-                                    (if chatgpt--use-api chatgpt-api-engine chatgpt-engine)
-                                    chatgpt--use-api)))))
+  (let ((buf chatgpt--last-buf))
     (if (not (and buf (buffer-live-p buf)))
-        (message "No active ChatGPT response buffer found.")
+        (message "No active response buffer found.")
       (with-current-buffer buf
-        (let ((prompt chatgpt--last-prompt)
+        (let ((prompt chatgpt--prompt)
               (response (string-trim (buffer-string))))
           (with-current-buffer (window-buffer (selected-window)) ;; Insert into original buffer.
             (if arg
@@ -378,11 +374,11 @@ Do not add '> ' at the beginning of lines.
 
 ----
 ")
+	 (engine chatgpt-default-api-engine)
          (prompt (concat (substring buf 0 (1- pnt))
 			 "__FILL_THIS_PART__"
 			 (substring buf (1- pnt)))))
-    (let ((chatgpt--use-api t))
-      (chatgpt--send-prompt (concat prefix prompt) t))))
+    (chatgpt--send-prompt (concat prefix prompt) engine 'use-api)))
 
 (defun chatgpt-select-engine ()
   "Change the AI engine."
@@ -391,7 +387,7 @@ Do not add '> ' at the beginning of lines.
 	      "Select engine (c:chatgpt, g:gemini, o:ollama, l:claude, p:copilot, e:copilot-enterprise): "))
          (selected (cdr (assoc ch chatgpt-engine-alist))))
     (if selected
-        (setq chatgpt-engine selected)
-      (message "No engine selected, keeping %s" chatgpt-engine))))
+        (setq chatgpt-default-engine selected)
+      (message "No engine selected, keeping %s" chatgpt-default-engine))))
 
 (provide 'chatgpt)
