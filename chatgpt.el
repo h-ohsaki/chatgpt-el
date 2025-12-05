@@ -248,17 +248,19 @@
     (buffer-string)))
 
 (defun chatgpt--save-response ()
-  "Save the last prompt and response to a log file."
+  "Save the last prompt and response."
   (interactive)
   (when chatgpt--last-prompt 
     (let* ((save-silently t)
-           (base (format-time-string "%Y%m%d"))
-	   (file (format "~/var/log/chatgpt/%s-%s.org" chatgpt-engine base)))
+           (base (format-time-string "~/var/log/chatgpt/%y%m%d-%H%M%S"))
+	   (pt-file (concat base ".pt"))
+	   (rs-file (concat base ".rs")))
       (with-temp-buffer
-	(insert "\n** ")
-	;; Insert prompt and response at the point.
-	(chatgpt-insert-response '(4))
-	(write-region (point-min) (point-max) file 'append)))))
+	(insert chatgpt--last-prompt)
+	(write-region (point-min) (point-max) pt-file))
+      (with-temp-buffer
+	(chatgpt-insert-response)
+	(write-region (point-min) (point-max) rs-file)))))
 
 ;; ---------------- Response monitor.
 (defun chatgpt--start-monitor ()
@@ -358,7 +360,7 @@
   (let ((chatgpt-use-api t))
     (chatgpt-send arg)))
 
-(defun chatgpt-insert-response (arg)
+(defun chatgpt-insert-response (&optional arg)
   "Insert the latest response from the AI. If ARG is non-nil, include the prompt."
   (interactive "P")
   (let ((response (string-trim (chatgpt--extract-response))))
