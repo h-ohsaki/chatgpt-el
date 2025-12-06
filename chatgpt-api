@@ -108,7 +108,7 @@ qwen2.5-coder:7b      4.7 GB
 qwen2.5:14b           9.0 GB
 qwen2.5:7b            4.7 GB""")
 
-    def send_prompt(self, prompt):
+    def send_prompt(self, prompt, outfile):
         print(f'[{self.model}]', flush=True)
         prompt = self.expand_macros(prompt)
         payload = {
@@ -157,7 +157,7 @@ gpt-5.1        $10     4      4      2025-04-01
 gpt-4-turbo    $30     2      3      2023-12-01
 o1             $60     R4     1      2023-10-01""")
 
-    def send_prompt(self, prompt):
+    def send_prompt(self, prompt, outfile):
         print(f'[{self.model}]')
         prompt = self.expand_macros(prompt)
         stream = self.client.responses.create(
@@ -221,7 +221,7 @@ gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
         ]
         return safety_settings
 
-    def _send_prompt(self, prompt):
+    def _send_prompt(self, prompt, outfile):
         # Configure generation parameters including safety settings.
         # We explicitly set all safety thresholds to BLOCK_NONE to minimize filtering.
         config = google.genai.types.GenerateContentConfig(
@@ -279,7 +279,7 @@ gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
             if response.text:
                 print(f'Response text: {response.text}')
 
-    def send_prompt(self, prompt, outfile='out.png'):
+    def send_prompt(self, prompt, outfile):
         print(f'[{self.model}]')
         prompt = self.expand_macros(prompt)
         if 'imagen' in self.model:
@@ -287,7 +287,7 @@ gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
         elif 'image' in self.model:
             self._generate_image_gemini(prompt, outfile)
         else:
-            self._send_prompt(prompt)
+            self._send_prompt(prompt, outfile)
 
 ENGINES = {'ollama': Ollama, 'chatgpt': ChatGPT, 'gemini': Gemini}
 
@@ -299,6 +299,7 @@ def main():
     model = opt.m
     inst = opt.i or INSTRUCTIONS
     prompt = opt.s
+    outfile = opt.O if opt.O else 'out.png'
 
     cls_ = ENGINES[engine]
     client = cls_(model=model, inst=inst)
@@ -307,7 +308,7 @@ def main():
     else:
         if not prompt:
             prompt = sys.stdin.read().strip()
-        client.send_prompt(prompt)
+        client.send_prompt(prompt, outfile)
 
 if __name__ == "__main__":
     main()
