@@ -35,7 +35,8 @@
 (defvar chatgpt-default-engine "gemini")
 
 (defvar chatgpt-api-prog "~/src/chatgpt-el/chatgpt-api")
-(defvar chatgpt-default-api-engine "ollama")
+(defvar chatgpt-default-api-engine "chatgpt")
+(defvar chatgpt-default-api-model "gpt-5.1")
 
 (defvar chatgpt-browser-prog "qutebrowser")
 (defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9000"))
@@ -50,6 +51,7 @@
     (?e . "Translate the following in English in a plain academic writing style:")
     (?p . "Proofread the following and provide a list of changes made in Markdown table:")
     (?r . "Rewrite the following in a plain academic writing style:")
+    (?E . "Review and identify errors in the following program:")
     (?R . "Refactor the code starting from ----.  Do not delete any comment.  Add a short docstring for functions if missing. ----"))
   "Alist of prompt prefixes.")
 
@@ -61,6 +63,23 @@
     (?p . "copilot")
     (?e . "copilot-enterprise"))
   "Alist mapping characters to engine names.")
+
+(defvar chatgpt-model-alist
+  '(("chatgpt" . "ChatGPT 5.1")
+    ("gemini" . "Gemini 3")
+    ("claude" . "Claude Sonnet 4.5")
+    ("copilot" . "Copilot Auto")
+    ("copilot-enterprise" . "Copilot Auto")))
+
+(defvar chatgpt-api-model-alist
+  '((?1 . "gemma3:4b-it-qat")
+    (?2 . "ministral-3:3b-instruct-2512-q4_K_M")
+    (?3 . "gemma3:12b-it-qat")
+    (?4 . "llama3.1:8b")
+    (?5 . "gemma3:1b-it-qat")
+    (?8 . "deepseek-coder-v2:lite")
+    (?9 . "deepseek-coder-v2:16b")
+    (?0 . "qwen2.5-coder:14b")))
 
 ;;; Internal Variables (Buffer Local)
 
@@ -200,10 +219,12 @@
       (chatgpt--start-browser)
 
       (let* ((prog (if use-api chatgpt-api-prog chatgpt-prog))
-             (args (list "-e" engine "-s" prompt)))
-        (setq chatgpt--process
-              (apply 'start-process engine buf prog args)))
-
+             (args (list "-e" engine "-m" chatgpt-default-api-model))
+             (proc (apply 'start-process engine buf prog args)))
+	(setq chatgpt--process proc)
+        (process-send-string proc (concat prompt "\n"))
+	(process-send-eof proc))
+	
       (set-process-filter chatgpt--process 'chatgpt--process-filter)
       (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
       (setq chatgpt--prompt prompt)
@@ -279,18 +300,22 @@
           (erase-buffer)
           (let ((proc (start-process "chatgpt-monitor" raw-buf
                                      chatgpt-prog "-e" engine "-r")))
+	    (setq chatgpt--monitor-process proc)
             ;; Save the target response buffer in the process object for the sentinel
             (process-put proc 'target-buffer buf)
             (set-process-sentinel proc 'chatgpt--monitor-process-sentinel)))))))
 
 (defun chatgpt--monitor-format-buffer ()
   "Format the contents of the response buffer."
+  (goto-char (point-min))
+  (insert (format "[%s]\n" (cdr (assoc chatgpt--engine chatgpt-model-alist))))
   (chatgpt--replace-regexp "\n\n\\( *[0-9-] .+?\\)$" "\n\\1")
   (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1")
   (chatgpt--replace-regexp "’" "'")
   (chatgpt--replace-regexp "—" "---")
   (chatgpt--replace-regexp "–" "-")
-  (chatgpt--replace-regexp "^Edit in a page$" ""))
+  (chatgpt--replace-regexp "^Edit in a page$" "")
+  (chatgpt--replace-regexp "^SVG Image\n" ""))
 
 (defun chatgpt--monitor-process-sentinel (proc event)
   "Handle the completion EVENT of the monitor process PROC."
@@ -330,7 +355,7 @@ prefix."
 	(engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
         (prompt (chatgpt--find-prompt)))
     (when (equal arg '(16))
-      (let* ((ch (read-char "Select [w]hat/[s]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[R]efactor: "))
+      (let* ((ch (read-char "Prefix [w]hat/[s]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[E]rror/[R]efactor: "))
              (entry (assoc ch chatgpt-prefix-alist)))
         (setq prefix (cdr entry))))
     (when arg
@@ -366,28 +391,52 @@ prefix."
   (interactive)
   (let* ((pnt (point))
          (buf (buffer-string))
-         (prefix "Write sentences/program that fits in __FILL_THIS_PART__ in the text after ----.
-If the text is in RFC 822 format email, write five sentences corresponding to the previous message.
-Every line of the previous message is marked with '> '.
-Do not output anything except the sentences/program that fits in __FILL_THIS_PART__.
-Do not add '> ' at the beginning of lines.
+         (prefix "--- 以下の文書の __FILL_THIS_PART__ に入る文章もしくはプログラムを適切に埋めて。
+文書がプログラムであれば、プログラムを埋めて完成させて。
+文書が書類であれば、書類を埋めて完成させて。
+文書がメールであれば、メールに対する返信を埋めて完成させて。
+相手のメールは行頭に '> ' を付けて引用されている。
+文書と同じ言語で書いて。
+__FILL_THIS_PART__ に入る文章のみを示して。
+絶対にそれ以外のものは出力しないで。
 
-----
+---
 ")
 	 (engine chatgpt-default-api-engine)
          (prompt (concat (substring buf 0 (1- pnt))
 			 "__FILL_THIS_PART__"
 			 (substring buf (1- pnt)))))
-    (chatgpt--send-prompt (concat prefix prompt) engine 'use-api)))
+    (chatgpt--send-prompt (concat prefix prompt) engine t)))
 
-(defun chatgpt-select-engine ()
-  "Change the AI engine."
-  (interactive)
-  (let* ((ch (read-char-from-minibuffer
-	      "Select engine (c:chatgpt, g:gemini, o:ollama, l:claude, p:copilot, e:copilot-enterprise): "))
+(defun chatgpt-select-engine (arg)
+  "Change the AI engine.  With the prefix argument ARG, change the default
+API engine; without ARG, change the default local engine."
+  (interactive "P")
+  (let* ((engine-list (mapconcat (lambda (pair)
+				   (format "%c:%s" (car pair) (cdr pair)))
+				 chatgpt-engine-alist
+				 ", "))
+	 (prompt  (format "Select %sengine (%s): "
+			  (if arg "API " "")
+			  engine-list))
+	 (ch (read-char-from-minibuffer prompt))
          (selected (cdr (assoc ch chatgpt-engine-alist))))
-    (if selected
-        (setq chatgpt-default-engine selected)
-      (message "No engine selected, keeping %s" chatgpt-default-engine))))
+    (when selected
+      (if arg
+          (setq chatgpt-default-api-engine selected)
+        (setq chatgpt-default-engine selected)))))
+
+(defun chatgpt-select-api-model ()
+  (interactive)
+  (let* ((model-list (mapconcat (lambda (pair)
+				   (format "%c:%s" (car pair) (cdr pair)))
+				 chatgpt-api-model-alist
+				 ", "))
+	 (prompt  (format "Select API model (%s): "
+			  model-list))
+	 (ch (read-char-from-minibuffer prompt))
+         (selected (cdr (assoc ch chatgpt-api-model-alist))))
+    (when selected
+        (setq chatgpt-default-api-model selected))))
 
 (provide 'chatgpt)
