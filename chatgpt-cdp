@@ -155,18 +155,19 @@ def recv_response(config):
         print('EOF')
 
 def main():
-    opt = getopts('e:is:r') or usage()
-    engine = opt.e if opt.e else 'chatgpt'
-    engine = engine.lower()
+    opt = getopts('vIe:m:s:r') or usage()
+    verbose = opt.v
+    engine = opt.e.lower() if opt.e else 'chatgpt'
+    model = opt.m
     config = CONFIGS[engine]
-    if opt.i:
+    if opt.I:
         ws = open_wsocket(config)
-    if opt.s:
-        prompt = opt.s
-        send_prompt(config, prompt)
+        sys.exit()
     if opt.r:
-        time.sleep(1)
         recv_response(config)
+    else:
+        prompt = opt.s if opt.s else sys.stdin.read().strip()
+        send_prompt(config, prompt)
 
 if __name__ == "__main__":
     main()
