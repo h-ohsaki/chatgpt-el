@@ -18,6 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import collections
 import json
 import os
 import re
@@ -30,6 +31,10 @@ import openai
 import tbdump
 
 OLLAMA_URL = 'http://vcserv:11434/api/generate'
+# OLLAMA_MODEL = 'ministral-3:3b-instruct-2512-q4_K_M'
+OLLAMA_MODEL = 'gemma3:4b-it-qat'
+# OLLAMA_MODEL = 'deepseek-coder-v2'
+# OLLAMA_MODEL = 'qwen2.5-coder:7b'
 
 INSTRUCTIONS = """\
 あなたは親切で信頼できる優秀な AI アドバイザです。
@@ -76,13 +81,16 @@ usage: {sys.argv[0]} [-vl] [-e engine] [-m model] [-i inst] [-s prompt] [-O path
 
 # Ollama ----------------------------------------------------------------
 class Ollama:
-    def __init__(self, model=None, inst='', max_tokens=8192, temp=0.):
+    def __init__(self, model=None, inst='', max_tokens=8192, temp=.1):
         if model is None:
-            model = 'qwen2.5:14b'
+            model = OLLAMA_MODEL
         self.model = model
         self.inst = inst
         self.max_tokens = max_tokens
         self.temp = temp
+        self._line_counts = collections.defaultdict(int)
+        self._line_buf = ''
+        self._output_size = 0
 
     def expand_macros(self, astr):
         def _include(match):
@@ -99,14 +107,39 @@ class Ollama:
 
     def list_models(self):
         print("""\
-model                 size
-deepseek-coder-v2     8.9 GB
-deepseek-r1:8b        5.2 GB
-llama3.1:8b           4.9 GB
-phi4                  9.1 GB
-qwen2.5-coder:7b      4.7 GB
-qwen2.5:14b           9.0 GB
-qwen2.5:7b            4.7 GB""")
+deepseek-coder-v2:latest
+deepseek-r1:1.5b
+deepseek-r1:7b
+deepseek-r1:8b
+gemma3:12b-it-qat
+gemma3:4b
+gemma3:4b-it-qat
+llama3.1:8b
+ministral-3:3b
+ministral-3:3b-instruct-2512-q4_K_M
+ministral-3:8b
+phi4:latest
+qwen2.5:3b
+qwen2.5:7b
+qwen2.5-coder:7b
+qwen3:4b
+qwen3:8b
+""")
+
+    def _print(self, buf):
+        sys.stdout.write(buf)
+        sys.stdout.flush()
+        self._line_buf += buf
+        self._output_size += len(buf)
+        if self._output_size >20000:
+            raise RuntimeError(f'Too long output: {self._output_size}')
+        while '\n' in self._line_buf:
+            line, rest = self._line_buf.split('\n', 1)
+            self._line_buf = rest
+            if len(line) >= 16:
+                self._line_counts[line] += 1
+                if self._line_counts[line] > 10:
+                    raise RuntimeError(f'Too many repeate lines: {line}')
 
     def send_prompt(self, prompt, outfile):
         print(f'[{self.model}]', flush=True)
@@ -114,7 +147,7 @@ qwen2.5:7b            4.7 GB""")
         payload = {
             'model': self.model, 'system': self.inst, 'prompt': prompt,
             'stream': True, 'num_predict': self.max_tokens, 'options':
-            {'temperature': self.temp}
+            {'temperature': self.temp, 'num_ctx': 4096 * 2}
         }
         response = requests.post(OLLAMA_URL,
                                  json=payload,
@@ -130,7 +163,7 @@ qwen2.5:7b            4.7 GB""")
             if 'response' in data:
                 token = data['response']
                 token = token.replace('__NEWLINE__', '\n')
-                print(token, end='', flush=True)
+                self._print(token)
         print()
 
 # ChatGPT ----------------------------------------------------------------
@@ -154,6 +187,7 @@ o4-mini        $4.4    R4     3      2024-06-01
 o3             $8      R5     1      2024-06-01
 gpt-4o         $10     3      3      2023-10-01
 gpt-5.1        $10     4      4      2025-04-01
+gpt-5.2        $14     4      4      2025-08-31
 gpt-4-turbo    $30     2      3      2023-12-01
 o1             $60     R4     1      2023-10-01""")
 
@@ -171,7 +205,7 @@ o1             $60     R4     1      2023-10-01""")
         for event in stream:
             try:
                 delta = event.delta
-                print(delta, end='', flush=True)
+                self._print(delta)
             except AttributeError:
                 pass
         print()
@@ -235,7 +269,7 @@ gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
                                                             config=config)
         for chunk in stream:
             if chunk.text:
-                print(chunk.text, end='', flush=True)
+                self._print(chunk.text)
         print()
 
     def _generate_image_imagen(self, prompt, outfile):
