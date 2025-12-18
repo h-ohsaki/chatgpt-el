@@ -36,7 +36,7 @@
 
 (defvar chatgpt-api-prog "~/src/chatgpt-el/chatgpt-api")
 (defvar chatgpt-default-api-engine "chatgpt")
-(defvar chatgpt-default-api-model "gpt-5.1")
+(defvar chatgpt-default-api-model "gpt-5.2")
 
 (defvar chatgpt-browser-prog "qutebrowser")
 (defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9000"))
@@ -47,11 +47,12 @@
 (defvar chatgpt-prefix-alist
   '((?w . "Explain the following in Japanese with definition, pros, cons, examples, and issues:")
     (?s . "Summarize the following in Japanese in a plain academic writing style:")
+    (?S . "Select interesting or noteworthy information from the following and present five items in a ranked list in Japanese:")
     (?j . "Translate the following in Japanese in a plain academic writing style:")
     (?e . "Translate the following in English in a plain academic writing style:")
     (?p . "Proofread the following and provide a list of changes made in Markdown table:")
     (?r . "Rewrite the following in a plain academic writing style:")
-    (?E . "Review and identify errors in the following program:")
+    (?E . "Review and identify errors in the following document/program:")
     (?R . "Refactor the code starting from ----.  Do not delete any comment.  Add a short docstring for functions if missing. ----"))
   "Alist of prompt prefixes.")
 
@@ -65,21 +66,21 @@
   "Alist mapping characters to engine names.")
 
 (defvar chatgpt-model-alist
-  '(("chatgpt" . "ChatGPT 5.1")
+  '(("chatgpt" . "ChatGPT 5.2")
     ("gemini" . "Gemini 3")
     ("claude" . "Claude Sonnet 4.5")
     ("copilot" . "Copilot Auto")
     ("copilot-enterprise" . "Copilot Auto")))
 
 (defvar chatgpt-api-model-alist
-  '((?1 . "gemma3:4b-it-qat")
-    (?2 . "ministral-3:3b-instruct-2512-q4_K_M")
-    (?3 . "gemma3:12b-it-qat")
-    (?4 . "llama3.1:8b")
-    (?5 . "gemma3:1b-it-qat")
-    (?8 . "deepseek-coder-v2:lite")
-    (?9 . "deepseek-coder-v2:16b")
-    (?0 . "qwen2.5-coder:14b")))
+  '((?1 . "gemma3:12b-it-qat-jp") ;; 8.9GB
+    (?2 . "gemma3:4b-it-qat") ;; 4.0GB
+    (?3 . "phi4:15b-q3_K_M") ;; 7.4GB
+    (?4 . "qwen3:8b") ;; 5.2GB
+    (?5 . "qwen3:4b") ;; 2.5GB
+    (?9 . "deepseek-coder-v2:16b") ;; 8.9GB
+    (?0 . "qwen2.5-coder:14b") ;; 9.0GB
+    ))
 
 ;;; Internal Variables (Buffer Local)
 
@@ -188,20 +189,23 @@
               end (point)))))
     (replace-regexp-in-string "^Q\\. *" "" prompt)))
 
+(defun chatgpt--port-listening-p (host port)
+  (let ((connected nil))
+    (condition-case nil
+	(let ((proc (open-network-stream "chatgpt" nil host port)))
+          (setq connected t)
+          (delete-process proc))
+      (error nil))
+    connected))
+
 (defun chatgpt--start-browser ()
   "Start web browser if not running."
   (unless chatgpt--use-api
-    (let ((pid (string-trim (shell-command-to-string
-                             (format "pgrep %s" chatgpt-browser-prog)))))
-      (when (string-empty-p pid)
-        (apply 'start-process chatgpt-browser-prog nil chatgpt-browser-prog chatgpt-browser-args)
-        (let ((connected nil))
-          (while (not connected)
-            (condition-case nil
-                (let ((proc (open-network-stream "chatgpt" nil "localhost" 9000)))
-                  (setq connected t)
-                  (delete-process proc))
-              (error (sleep-for .5)))))))))
+      (unless (chatgpt--port-listening-p "localhost" 9000)
+        (apply 'start-process chatgpt-browser-prog nil
+	       chatgpt-browser-prog chatgpt-browser-args)
+          (while (not (chatgpt--port-listening-p "localhost" 9000))
+            (sleep-for .5)))))
 
 ;;; Process Handling (Send & Receive)
 
@@ -355,7 +359,7 @@ prefix."
 	(engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
         (prompt (chatgpt--find-prompt)))
     (when (equal arg '(16))
-      (let* ((ch (read-char "Prefix [w]hat/[s]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[E]rror/[R]efactor: "))
+      (let* ((ch (read-char "Prefix [w]hat/[s]ummary/[S]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[E]rror/[R]efactor: "))
              (entry (assoc ch chatgpt-prefix-alist)))
         (setq prefix (cdr entry))))
     (when arg
@@ -391,14 +395,14 @@ prefix."
   (interactive)
   (let* ((pnt (point))
          (buf (buffer-string))
-         (prefix "--- 以下の文書の __FILL_THIS_PART__ に入る文章もしくはプログラムを適切に埋めて。
-文書がプログラムであれば、プログラムを埋めて完成させて。
-文書が書類であれば、書類を埋めて完成させて。
-文書がメールであれば、メールに対する返信を埋めて完成させて。
-相手のメールは行頭に '> ' を付けて引用されている。
-文書と同じ言語で書いて。
-__FILL_THIS_PART__ に入る文章のみを示して。
-絶対にそれ以外のものは出力しないで。
+         (prefix "Appropriately fill in the __FILL_THIS_PART__ placeholder in the following document with the corresponding text or program.
+If the document is a program, complete the code.
+If it is a general document, complete the text.
+If it is an email, compose a reply;
+note that the sender's message is quoted with a leading '> '.
+Write in the same language as the source document.
+Output only the content to be inserted into __FILL_THIS_PART__.
+Strictly exclude any other output.
 
 ---
 ")
