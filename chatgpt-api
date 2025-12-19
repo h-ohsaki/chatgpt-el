@@ -31,10 +31,7 @@ import openai
 import tbdump
 
 OLLAMA_URL = 'http://vcserv:11434/api/generate'
-# OLLAMA_MODEL = 'ministral-3:3b-instruct-2512-q4_K_M'
-OLLAMA_MODEL = 'gemma3:4b-it-qat'
-# OLLAMA_MODEL = 'deepseek-coder-v2'
-# OLLAMA_MODEL = 'qwen2.5-coder:7b'
+OLLAMA_MODEL = 'qwen3:14b'
 
 INSTRUCTIONS = """\
 あなたは親切で信頼できる優秀な AI アドバイザです。
@@ -107,21 +104,28 @@ class Ollama:
 
     def list_models(self):
         print("""\
-deepseek-coder-v2:latest
+deepseek-coder:6.7b
+deepseek-coder-v2:16b
+deepseek-r1:14b
+deepseek-r1:14b-jpn
 deepseek-r1:1.5b
 deepseek-r1:7b
 deepseek-r1:8b
 gemma3:12b-it-qat
-gemma3:4b
+gemma3:12b-it-qat-jp
+gemma3:1b-it-qat
+gemma3:27b-it-qat
 gemma3:4b-it-qat
-llama3.1:8b
-ministral-3:3b
 ministral-3:3b-instruct-2512-q4_K_M
-ministral-3:8b
-phi4:latest
+ministral-3:8b-it-q4_k_m
+mistral:7b-instruct
+phi4:14b
+phi4:15b-q3_K_M
 qwen2.5:3b
 qwen2.5:7b
+qwen2.5-coder:14b
 qwen2.5-coder:7b
+qwen3:14b
 qwen3:4b
 qwen3:8b
 """)
@@ -138,7 +142,7 @@ qwen3:8b
             self._line_buf = rest
             if len(line) >= 16:
                 self._line_counts[line] += 1
-                if self._line_counts[line] > 10:
+                if self._line_counts[line] > 20:
                     raise RuntimeError(f'Too many repeate lines: {line}')
 
     def send_prompt(self, prompt, outfile):
@@ -179,29 +183,34 @@ class ChatGPT(Ollama):
 model          output  intel  speed  cutoff
 gpt-4.1-nano   $0.4    2      5      2024-06-01
 gpt-4o-mini    $0.6    2      4      2023-10-01
-gpt-3.5-turbo  $1.5    1      2      2021-09-01
 gpt-4.1-mini   $1.6    3      4      2024-06-01
+gpt-5-nano     $0.4    2      5      2024-05-31
+gpt-5-mini     $2      3      4      2024-05-31
 o1-mini        $4.4    R3     2      2023-10-01
 o3-mini        $4.4    R4     3      2024-10-01
 o4-mini        $4.4    R4     3      2024-06-01
 o3             $8      R5     1      2024-06-01
 gpt-4o         $10     3      3      2023-10-01
 gpt-5.1        $10     4      4      2025-04-01
-gpt-5.2        $14     4      4      2025-08-31
+gpt-5.2	       $14     4      4      2025-08-31
 gpt-4-turbo    $30     2      3      2023-12-01
-o1             $60     R4     1      2023-10-01""")
+o1             $60     R4     1      2023-10-01
+gpt-5.2-pro    $168    4      1      2025-08-31
+""")
 
     def send_prompt(self, prompt, outfile):
         print(f'[{self.model}]')
         prompt = self.expand_macros(prompt)
-        stream = self.client.responses.create(
+        params = dict(
             model=self.model,
             instructions=self.inst,
             input=prompt,
             stream=True,
             max_output_tokens=self.max_tokens,
-            temperature=self.temp,
         )
+        if not self.model.startswith(('gpt-5', 'o')):
+            params["temperature"] = self.temp
+        stream = self.client.responses.create(**params)
         for event in stream:
             try:
                 delta = event.delta
@@ -214,7 +223,7 @@ o1             $60     R4     1      2023-10-01""")
 class Gemini(Ollama):
     def __init__(self, model=None, *args, **kwargs):
         if model is None:
-            model = 'gemini-2.5-flash'
+            model = 'gemini-flash-preview'
         super().__init__(model=model, *args, **kwargs)
         api_key = os.environ.get('GOOGLE_API_KEY')
         self.client = google.genai.Client(api_key=api_key)
@@ -232,9 +241,9 @@ class Gemini(Ollama):
 model                          output   input    speed        context
 gemini-2.5-flash               $0.2     $0.05    Fastest      2M
 gemini-1.5-flash               $0.3     $0.075   Fast         2M
+gemini-3-flash-preview         $3       $0.5
 gemini-1.5-pro                 $10.5    $3.5     Medium       2M
 gemini-3-pro-preview           $12      $2       Variable*    1M
-
 imagen-4.0-generate-001        $0.04    n/a      n/a          n/a
 imagen-4.0-ultra-generate-001  $0.06    n/a      n/a          n/a
 gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
