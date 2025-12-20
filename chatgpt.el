@@ -55,42 +55,38 @@
     (?R . "Refactor the code starting from ----.  Do not delete any comment.  Add a short docstring for functions if missing. ----"))
   "Alist of prompt prefixes.")
 
-(defvar chatgpt-available-engines-alist
-  '((?c . "chatgpt")
-    (?g . "gemini")
-    (?o . "ollama")
-    (?l . "claude")
-    (?p . "copilot")
-    (?e . "copilot-enterprise"))
-  "Alist mapping characters to engine names.")
+(defvar chatgpt-available-engines
+  '("chatgpt" "gemini" "ollama" "claude" "copilot" "copilot-enterprise"))
 
 (defvar chatgpt-model-alist
-  '(("chatgpt" . "ChatGPT 5.2")
-    ("gemini" . "Gemini 3")
-    ("claude" . "Claude Sonnet 4.5")
-    ("copilot" . "Copilot Auto")
-    ("copilot-enterprise" . "Copilot Auto")))
+  '(("chatgpt" . "ChatGPT-5.2")
+    ("gemini" . "Gemini-3")
+    ("claude" . "ClaudeSonnet-4.5")
+    ("copilot" . "Copilot-Auto")
+    ("copilot-enterprise" . "Copilot-Auto")))
 
 (defvar chatgpt-api-available-models-alist
-  '(("ollama" .  ((?1 . "gemma3:12b-it-qat-jp") ;; 8.9GB
-		  (?2 . "gemma3:4b-it-qat") ;; 4.0GB
-		  (?3 . "phi4:15b-q3_K_M") ;; 7.4GB
-		  (?4 . "qwen3:8b") ;; 5.2GB
-		  (?5 . "qwen3:4b") ;; 2.5GB
-		  (?9 . "deepseek-coder-v2:16b") ;; 8.9GB
-		  (?0 . "qwen2.5-coder:14b") ;; 9.0GB
-		  ))))
+  '(("chatgpt" . ("gpt-5.2" "gpt-5.1" "gpt-5-mini" "gpt-4.1" "gpt-4.1-mini"))
+    ("gemini" . ("gemini-3-pro-preview" "gemini-3-flash-preview"
+		 "gemini-2.5-pro" "gemini-2.5-flash" "gemini-2.5-flash-lite"
+		 "gemini-2.0-flash" "gemini-2.0-flash-lite"))
+    ("ollama" .  ("gemma3:12b-it-qat-jp" "gemma3:4b-it-qat" "phi4:15b-q3_K_M"
+		  "qwen3:14b" "qwen3:8b" "qwen3:4b" "T3Q-qwen2.5:14b"
+		  "deepseek-r1:14b-jpn"
+		  "ministral-3:14b" "ministral-3:8b-instruct-2512-q4_K_M"
+		  "deepseek-coder-v2:16b" "qwen2.5-coder:14b"))))
 
 (defvar chatgpt-api-model-alist
-  '(("chatgpt" . "gpt-5.2")
-    ("gemini" . "gemini-3-pro-preview")
-    ("ollama" . "gemma3:4b-it-qat")))
+  '(("chatgpt" . "gpt-4.1-mini")
+    ("gemini" . "gemini-3-flash-preview")
+    ("ollama" . "ministral-3:14b")))
 
 ;;; Internal Variables (Buffer Local)
 
 (defvar chatgpt--last-buf nil)
 ;; Make variables buffer-local to support parallel execution across different buffers.
 (defvar-local chatgpt--engine nil)
+(defvar-local chatgpt--model nil)
 (defvar-local chatgpt--use-api nil)
 (defvar-local chatgpt--process nil)
 (defvar-local chatgpt--prompt nil)
@@ -118,37 +114,43 @@
 (define-derived-mode chatgpt-mode text-mode "ChatGPT"
   "Major mode for ChatGPT response."
   (setq font-lock-defaults '(chatgpt-font-lock-keywords 'keywords-only nil))
-  (font-lock-mode 1))
+  (font-lock-mode 1)
+  (visual-line-mode 1))
 
 (defun chatgpt--update-mode-name (status)
   "Update the mode name to reflect the current status."
-  (setq mode-name (format "%s%s:%s"
-			  chatgpt--engine
-                          (if chatgpt--use-api "-api" "")
+  (setq mode-name (format "%s%s %s %s"
+                          chatgpt--engine (if chatgpt--use-api "-api" "") chatgpt--model
                           status))
   (force-mode-line-update))
 
 ;;; Buffer Management
 
-(defun chatgpt--buffer-name (engine use-api &optional raw)
-  "Generate buffer name based on ENGINE and USE-API."
-  (format "*%s%s %s*"
+(defun chatgpt--buffer-name (engine model use-api &optional raw)
+  "Generate buffer name based on ENGINE, MODEL and USE-API."
+  (format "*%s%s %s %s*"
           engine
+	  model
           (if use-api "-api" "")
           (if raw "raw" "response")))
 
-(defun chatgpt--get-buffer-create (engine use-api &optional raw)
-  "Get or create a buffer for the specific ENGINE and API usage."
-  (let ((buf-name (chatgpt--buffer-name engine use-api raw)))
+(defun chatgpt--get-buffer-create (engine model use-api &optional raw)
+  "Get or create a buffer for the specific ENGINE, MODEL and API usage."
+  (let ((buf-name (chatgpt--buffer-name engine model use-api raw)))
     (get-buffer-create buf-name)))
 
-(defun chatgpt--init-buffer (engine use-api)
+(defun chatgpt--init-buffer (engine model use-api)
   "Initialize the response buffer with local variables."
-  (let ((buf (chatgpt--get-buffer-create engine use-api)))
+  (let ((buf (chatgpt--get-buffer-create engine model use-api)))
     (with-current-buffer buf
+      (let ((proc (get-buffer-process buf)))
+        (when (processp proc)
+          (set-process-sentinel proc nil)
+          (delete-process proc)))
       (chatgpt-mode)
       ;; Set local variables specific to this execution context.
       (setq chatgpt--engine engine)
+      (setq chatgpt--model model)
       (setq chatgpt--use-api use-api)
       (chatgpt--update-mode-name "streaming")
       (erase-buffer)
@@ -208,17 +210,11 @@
           (while (not (chatgpt--port-listening-p "localhost" 9000))
             (sleep-for .5)))))
 
-;; (chatgpt--model nil "chatgpt")
-(defun chatgpt--model (engine use-api)
-  (if use-api
-      (cdr (assoc engine chatgpt-api-model-alist))
-    (cdr (assoc engine chatgpt-model-alist))))
-
 ;;; Process Handling (Send & Receive)
 
-(defun chatgpt--send-prompt (prompt engine use-api)
+(defun chatgpt--send-prompt (prompt engine model use-api)
   "Send PROMPT to the AI using specified configuration."
-  (let ((buf (chatgpt--init-buffer engine use-api)))
+  (let ((buf (chatgpt--init-buffer engine model use-api)))
 
     (with-current-buffer buf
       (chatgpt--stop-monitor) ;; Stop existing monitor in THIS buffer
@@ -230,7 +226,6 @@
       (chatgpt--start-browser)
 
       (let* ((prog (if use-api chatgpt-api-prog chatgpt-prog))
-	     (model (chatgpt--model engine use-api))
              (args (list "-e" engine "-m" model))
              (proc (apply 'start-process engine buf prog args)))
 	(setq chatgpt--process proc)
@@ -270,7 +265,8 @@
 (defun chatgpt--save ()
   "Save the last prompt and response."
   (let* ((save-silently t)
-         (base (format-time-string "~/var/log/chatgpt/%y%m%d-%H%M%S"))
+	 (tstamp (format-time-string "%y%m%d-%H%M%S"))
+         (base (format "~/var/log/chatgpt/%s-%s" chatgpt--engine tstamp))
 	 (prompt chatgpt--prompt)
 	 (response (buffer-string)))
       (with-temp-buffer
@@ -306,7 +302,7 @@
   "Monitor the response from the AI."
   (when (buffer-live-p buf)
     (with-current-buffer buf
-      (let ((raw-buf (chatgpt--get-buffer-create chatgpt--engine nil t))
+      (let ((raw-buf (chatgpt--get-buffer-create chatgpt--engine chatgpt--model nil t))
 	    (engine chatgpt--engine))
         (with-current-buffer raw-buf
           (erase-buffer)
@@ -320,7 +316,7 @@
 (defun chatgpt--monitor-format-buffer ()
   "Format the contents of the response buffer."
   (goto-char (point-min))
-  (insert (format "[%s]\n" (chatgpt--model chatgpt--engine chatgpt--use-api)))
+  (insert (format "[%s]\n" chatgpt--model))
   (chatgpt--replace-regexp "\n\n\\( *[0-9-] .+?\\)$" "\n\\1")
   (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1")
   (chatgpt--replace-regexp "’" "'")
@@ -363,9 +359,10 @@
   "Send a prompt to the AI. With C-u, edit prompt. With C-u C-u, select
 prefix."
   (interactive "P")
-  (let ((prefix "")
-	(engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
-        (prompt (chatgpt--find-prompt)))
+  (let* ((prefix "")
+	 (engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
+	 (model (cdr (assoc engine (if use-api chatgpt-api-model-alist chatgpt-model-alist))))
+         (prompt (chatgpt--find-prompt)))
     (when (equal arg '(16))
       (let* ((ch (read-char "Prefix [w]hat/[s]ummary/[S]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[E]rror/[R]efactor: "))
              (entry (assoc ch chatgpt-prefix-alist)))
@@ -378,7 +375,7 @@ prefix."
       (chatgpt--expand-macros)
       (setq prompt (buffer-string)))
     
-    (chatgpt--send-prompt (concat prefix prompt) engine use-api)))
+    (chatgpt--send-prompt (concat prefix prompt) engine model use-api)))
 
 (defun chatgpt-send-api (arg)
   (interactive "P")
@@ -415,44 +412,41 @@ Strictly exclude any other output.
 ---
 ")
 	 (engine chatgpt-default-api-engine)
+	 (model (cdr (assoc engine chatgpt-api-model-alist)))
          (prompt (concat (substring buf 0 (1- pnt))
 			 "__FILL_THIS_PART__"
 			 (substring buf (1- pnt)))))
-    (chatgpt--send-prompt (concat prefix prompt) engine t)))
+    (chatgpt--send-prompt (concat prefix prompt) engine model t)))
 
-(defun chatgpt-select-engine (arg)
-  "Change the AI engine.  With the prefix argument ARG, change the default
-API engine; without ARG, change the default Web engine."
+;; (chatgpt-select-engine nil)
+;; (chatgpt-select-engine t)
+(defun chatgpt-select-engine (use-api)
+  "Change the AI engine.  With the prefix argument USE-API, change the default
+API engine; without ARG, change the default engine for Web."
   (interactive "P")
-  (let* ((engine-list (mapconcat (lambda (pair)
-				   (format "%c:%s" (car pair) (cdr pair)))
-				 chatgpt-available-engines-alist
-				 ", "))
-	 (prompt  (format "Select %sengine (%s): "
-			  (if arg "API " "")
-			  engine-list))
-	 (ch (read-char-from-minibuffer prompt))
-         (selected (cdr (assoc ch chatgpt-available-engines-alist))))
-    (when selected
-      (if arg
+  (let* ((engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
+	 (selected (completing-read (format "Select %sengine [%s]: "
+					    (if use-api "API " "")
+					    engine)
+                                    chatgpt-available-engines
+				    nil t)))
+    (when (not (string= selected ""))
+      (if use-api
           (setq chatgpt-default-api-engine selected)
-        (setq chatgpt-default-engine selected)))))
+	(setq chatgpt-default-engine selected)))))
 
 ;; (chatgpt-select-api-model)
 (defun chatgpt-select-api-model ()
   (interactive)
-  (let* ((alist (cdr (assoc chatgpt-default-api-engine
-		       chatgpt-api-available-models-alist)))
-	 (model-list (mapconcat (lambda (pair)
-				   (format "%c:%s" (car pair) (cdr pair)))
-				alist
-				 ", "))
-	 (prompt  (format "Select API model (%s): "
-			  model-list))
-	 (ch (read-char-from-minibuffer prompt))
-         (selected (cdr (assoc ch alist))))
-    (when selected
-      (let ((pair (assoc chatgpt-default-api-engine chatgpt-api-model-alist)))
-        (setcdr pair selected)))))
+  (let* ((engine chatgpt-default-api-engine)
+	 (model (cdr (assoc engine chatgpt-api-model-alist)))
+	 (all-models (cdr (assoc engine chatgpt-api-available-models-alist)))
+	 (selected (completing-read (format "Select API model for %s [%s]: "
+					    engine
+					    model)
+                                    all-models
+				    nil t)))
+    (when (not (string= selected ""))
+      (setf (alist-get engine chatgpt-api-model-alist ni nil 'equal) selected))))
 
 (provide 'chatgpt)
