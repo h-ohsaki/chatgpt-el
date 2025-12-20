@@ -31,8 +31,8 @@ import websocket
 
 DEFAULT_TIMEOUT = 10
 
-Config = collections.namedtuple('Config',
-                                'url form_sel button_sel response_sel stop_sel')
+Config = collections.namedtuple(
+    'Config', 'url form_sel button_sel response_sel stop_sel')
 
 CONFIGS = {
     'chatgpt':
@@ -48,6 +48,12 @@ CONFIGS = {
            button_sel='button[aria-label="Send message"]',
            response_sel='response-container',
            stop_sel='button[aria-label="Stop response"]'),
+    'openwebui':
+    Config(url='http://vcserv:8080/',
+           form_sel='div#chat-input',
+           button_sel='button#send-message-button',
+           response_sel='div#response-content-container',
+           stop_sel='button.rounded-full'),
     'claude':
     Config(url='https://claude.ai/',
            form_sel='p[data-placeholder]',
