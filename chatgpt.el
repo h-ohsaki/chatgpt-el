@@ -55,31 +55,30 @@
     (?R . "Refactor the code starting from ----.  Do not delete any comment.  Add a short docstring for functions if missing. ----"))
   "Alist of prompt prefixes.")
 
-(defvar chatgpt-available-engines
-  '("chatgpt" "gemini" "ollama" "claude" "copilot" "copilot-enterprise"))
-
 (defvar chatgpt-model-alist
   '(("chatgpt" . "ChatGPT-5.2")
     ("gemini" . "Gemini-3")
+    ("openwebui" . "ministral-3:14b-instruct-2512-q4_K_M")
     ("claude" . "ClaudeSonnet-4.5")
     ("copilot" . "Copilot-Auto")
     ("copilot-enterprise" . "Copilot-Auto")))
+
+(defvar chatgpt-api-model-alist
+  '(("chatgpt" . "gpt-4.1-mini")
+    ("gemini" . "gemini-3-flash-preview")
+    ("ollama" . "ministral-3:14b")))
 
 (defvar chatgpt-api-available-models-alist
   '(("chatgpt" . ("gpt-5.2" "gpt-5.1" "gpt-5-mini" "gpt-4.1" "gpt-4.1-mini"))
     ("gemini" . ("gemini-3-pro-preview" "gemini-3-flash-preview"
 		 "gemini-2.5-pro" "gemini-2.5-flash" "gemini-2.5-flash-lite"
 		 "gemini-2.0-flash" "gemini-2.0-flash-lite"))
-    ("ollama" .  ("gemma3:12b-it-qat-jp" "gemma3:4b-it-qat" "phi4:15b-q3_K_M"
-		  "qwen3:14b" "qwen3:8b" "qwen3:4b" "T3Q-qwen2.5:14b"
+    ("ollama" .  ("gemma3:12b-it-qat-jp" "gemma3:4b-it-qat"
+		  "phi4:15b-q3_K_M" "phi4:14b"
+		  "qwen3:14b" "qwen3:8b" "qwen3:4b"
 		  "deepseek-r1:14b-jpn"
-		  "ministral-3:14b" "ministral-3:8b-instruct-2512-q4_K_M"
+		  "ministral-3:14b-instruct-2512-q4_K_M" "ministral-3:8b-instruct-2512-q4_K_M"
 		  "deepseek-coder-v2:16b" "qwen2.5-coder:14b"))))
-
-(defvar chatgpt-api-model-alist
-  '(("chatgpt" . "gpt-4.1-mini")
-    ("gemini" . "gemini-3-flash-preview")
-    ("ollama" . "ministral-3:14b")))
 
 ;;; Internal Variables (Buffer Local)
 
@@ -363,13 +362,10 @@ prefix."
 	 (engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
 	 (model (cdr (assoc engine (if use-api chatgpt-api-model-alist chatgpt-model-alist))))
          (prompt (chatgpt--find-prompt)))
-    (when (equal arg '(16))
+    (when arg
       (let* ((ch (read-char "Prefix [w]hat/[s]ummary/[S]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[E]rror/[R]efactor: "))
              (entry (assoc ch chatgpt-prefix-alist)))
         (setq prefix (cdr entry))))
-    (when arg
-      (setq prompt (read-string (format "%s prompt: " engine) prompt)))
-
     (with-temp-buffer
       (insert prompt)
       (chatgpt--expand-macros)
@@ -425,10 +421,11 @@ Strictly exclude any other output.
 API engine; without ARG, change the default engine for Web."
   (interactive "P")
   (let* ((engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
+	 (engines (map-keys (if use-api chatgpt-api-model-alist chatgpt-model-alist)))
 	 (selected (completing-read (format "Select %sengine [%s]: "
 					    (if use-api "API " "")
 					    engine)
-                                    chatgpt-available-engines
+				    engines
 				    nil t)))
     (when (not (string= selected ""))
       (if use-api
