@@ -31,7 +31,7 @@ import openai
 import tbdump
 
 OLLAMA_URL = 'http://vcserv:11434/api/generate'
-OLLAMA_MODEL = 'qwen3:14b'
+OLLAMA_MODEL = 'ministral-3:14b'
 
 INSTRUCTIONS = """\
 あなたは親切で信頼できる優秀な AI アドバイザです。
@@ -135,7 +135,7 @@ qwen3:8b
         sys.stdout.flush()
         self._line_buf += buf
         self._output_size += len(buf)
-        if self._output_size >20000:
+        if self._output_size > 20000:
             raise RuntimeError(f'Too long output: {self._output_size}')
         while '\n' in self._line_buf:
             line, rest = self._line_buf.split('\n', 1)
@@ -146,7 +146,6 @@ qwen3:8b
                     raise RuntimeError(f'Too many repeate lines: {line}')
 
     def send_prompt(self, prompt, outfile):
-        print(f'[{self.model}]', flush=True)
         prompt = self.expand_macros(prompt)
         payload = {
             'model': self.model, 'system': self.inst, 'prompt': prompt,
@@ -157,8 +156,12 @@ qwen3:8b
                                  json=payload,
                                  stream=True,
                                  headers={'Content-Type': 'application/json'})
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            die(f'{e}')
 
+        print(f'[{self.model}]', flush=True)
         for line in response.iter_lines(decode_unicode=True):
             if not line:
                 continue
@@ -199,7 +202,6 @@ gpt-5.2-pro    $168    4      1      2025-08-31
 """)
 
     def send_prompt(self, prompt, outfile):
-        print(f'[{self.model}]')
         prompt = self.expand_macros(prompt)
         params = dict(
             model=self.model,
@@ -210,7 +212,12 @@ gpt-5.2-pro    $168    4      1      2025-08-31
         )
         if not self.model.startswith(('gpt-5', 'o')):
             params["temperature"] = self.temp
-        stream = self.client.responses.create(**params)
+        try:
+            stream = self.client.responses.create(**params)
+        except Exception as e:
+            die(f'{e}')
+
+        print(f'[{self.model}]')
         for event in stream:
             try:
                 delta = event.delta
@@ -273,13 +280,16 @@ gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
             safety_settings=self._safety_settings())
 
         # Use streaming to display the response incrementally as it is generated.
-        stream = self.client.models.generate_content_stream(model=self.model,
-                                                            contents=prompt,
-                                                            config=config)
-        for chunk in stream:
-            if chunk.text:
-                self._print(chunk.text)
-        print()
+        try:
+            stream = self.client.models.generate_content_stream(
+                model=self.model, contents=prompt, config=config)
+            print(f'[{self.model}]')
+            for chunk in stream:
+                if chunk.text:
+                    self._print(chunk.text)
+            print()
+        except Exception as e:
+            die(f'{e}')
 
     def _generate_image_imagen(self, prompt, outfile):
         config = google.genai.types.GenerateImagesConfig(
@@ -323,7 +333,6 @@ gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
                 print(f'Response text: {response.text}')
 
     def send_prompt(self, prompt, outfile):
-        print(f'[{self.model}]')
         prompt = self.expand_macros(prompt)
         if 'imagen' in self.model:
             self._generate_image_imagen(prompt, outfile)
