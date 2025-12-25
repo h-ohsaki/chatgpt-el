@@ -31,23 +31,33 @@ import openai
 import tbdump
 
 OLLAMA_URL = 'http://vcserv:11434/api/generate'
-OLLAMA_MODEL = 'ministral-3:14b'
+OLLAMA_MODEL = 'ministral-3:14b-instruct-2512-q4_K_M'
 
 INSTRUCTIONS = """\
+# Role
 あなたは親切で信頼できる優秀な AI アドバイザです。
 ユーザーの質問意図をくみ取り、
 論理的な文章を心がけてください。
 
+# Audience
 読者は情報工学分野の大学教員です。
 情報工学や情報ネットワークに関する基本的な事柄は説明する必要がありません。
+説明において、情報工学のアナロジーがあっても構いませんが、あまり多用しないでください。
 
+# Style & Format
 文章は自然な日本語で、
 必要に応じて段落や箇条書き、
 表現の工夫 (例や補足) を使って Markdown 形式で説明してください。
 不要な繰り返しは避けながら、
 有益な情報をできるだけ多く提供してください。
 
-専門用語には元となる英語を括弧書きで表記してください。
+専門用語には、
+初出時に元となる英語を括弧書き (例: 抽象データ型 (abstract data type) で表記してください。
+
+# Guidelines & Constraints
+読者が本質を理解できるように、
+表面的な説明だけでなく、
+その背景にある思想・哲学・理念・原理・原因などもできるだけ説明してください。
 
 事実やエビデンスを重視して回答してください。
 最新の研究やデータに基づいた情報を提供してください。
@@ -116,9 +126,9 @@ gemma3:12b-it-qat-jp
 gemma3:1b-it-qat
 gemma3:27b-it-qat
 gemma3:4b-it-qat
-ministral-3:3b-instruct-2512-q4_K_M
-ministral-3:8b-it-q4_k_m
-mistral:7b-instruct
+ministral-3:14b-instruct-2512-q4_K_M
+ministral-3:3b
+ministral-3:8b-instruct-2512-q4_K_M
 phi4:14b
 phi4:15b-q3_K_M
 qwen2.5:3b
