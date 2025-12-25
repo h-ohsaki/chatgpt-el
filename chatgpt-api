@@ -152,7 +152,7 @@ qwen3:8b
             self._line_buf = rest
             if len(line) >= 16:
                 self._line_counts[line] += 1
-                if self._line_counts[line] > 20:
+                if self._line_counts[line] > 100:
                     raise RuntimeError(f'Too many repeate lines: {line}')
 
     def send_prompt(self, prompt, outfile):
