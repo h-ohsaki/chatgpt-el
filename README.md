@@ -38,6 +38,7 @@ according to your environment.
   - Chromium, Chrome or other browsers supporting the CDP protocol.
   - Python
   - websocket-client module ([https://pypi.org/project/websocket-client/](https://pypi.org/project/websocket-client/))
+  - perlcompat and tbdump modules
 
 # INSTALLATION
 
@@ -53,15 +54,17 @@ according to your environment.
 (autoload 'chatgpt-insert-response "chatgpt" nil t)
 (autoload 'chatgpt-fill "chatgpt" nil t)
 (autoload 'chatgpt-select-engine "chatgpt" nil t)
+(autoload 'chatgpt-select-api-model "chatgpt" nil t)
 (global-set-key "\C-cb" 'chatgpt-send)
 (global-set-key "\C-cq" 'chatgpt-send-api)
 (global-set-key "\C-cQ" 'chatgpt-insert-response)
 (global-set-key "\C-cf" 'chatgpt-fill)
 (global-set-key "\C-cE" 'chatgpt-select-engine)
+(global-set-key "\C-cM" 'chatgpt-select-api-model)
 (setq chatgpt-prog "../path/to/chatgpt-el/chatgpt-cdp")
-(setq chatgpt-default-engine "chatgpt")
+(setq chatgpt-default-engine "gemini")
 (setq chatgpt-prog-api "../path/to/chatgpt-el/chatgpt-api")
-(setq chatgpt-default-api-engine "gemini")
+(setq chatgpt-default-api-engine "chatgpt")
 EOF
 > mkdir -p ~/var/log/chatgpt
 ```
