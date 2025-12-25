@@ -32,7 +32,7 @@ import websocket
 DEFAULT_TIMEOUT = 10
 
 Config = collections.namedtuple(
-    'Config', 'url form_sel button_sel response_sel stop_sel')
+    'Config', 'url form_sel button_sel response_sel')
 
 CONFIGS = {
     'chatgpt':
@@ -40,38 +40,32 @@ CONFIGS = {
         url='https://chatgpt.com',
         form_sel='div#prompt-textarea',
         button_sel='button#composer-submit-button[data-testid="send-button"]',
-        response_sel='article > h6 + div',
-        stop_sel='button[aria-label="Stop streaming"]'),
+        response_sel='article > h6 + div'),
     'gemini':
     Config(url='https://gemini.google.com/',
            form_sel='div.textarea',
            button_sel='button[aria-label="Send message"]',
-           response_sel='response-container',
-           stop_sel='button[aria-label="Stop response"]'),
+           response_sel='response-container'),
     'openwebui':
     Config(url='http://vcserv:8080/',
            form_sel='div#chat-input',
            button_sel='button#send-message-button',
-           response_sel='div#response-content-container',
-           stop_sel='button.rounded-full'),
+           response_sel='div#response-content-container'),
     'claude':
     Config(url='https://claude.ai/',
            form_sel='p[data-placeholder]',
            button_sel='button[aria-label="Send message"]',
-           response_sel='div[data-test-render-count]',
-           stop_sel='button[aria-label="Stop response"]'),
+           response_sel='div[data-test-render-count]'),
     'copilot':
     Config(url='https://copilot.microsoft.com/',
            form_sel='textarea[placeholder="Message Copilot"]',
            button_sel='button[aria-label="Submit message"]',
-           response_sel='div[role="article"]',
-           stop_sel='button[aria-label="Interrupt message"]'),
+           response_sel='div[role="article"]'),
     'copilot-enterprise':
     Config(url='https://m365.cloud.microsoft/chat/',
            form_sel='span[aria-label="Message Copilot"]',
            button_sel='button[aria-label="Send"]',
-           response_sel='div[data-testid="markdown-reply"]',
-           stop_sel='button[aria-label="Stop generating"]'),
+           response_sel='div[data-testid="markdown-reply"]'),
 }
 
 def usage():
@@ -153,11 +147,11 @@ def recv_response(config):
     content = resp['result']['result']['value']
     print(content)
 
-    # Check if stop button is visible.
-    js = f"document.querySelector('{config.stop_sel}');"
+    # Check if submit button is visible.
+    js = f"document.querySelector('{config.button_sel}');"
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
-    is_busy = 'objectId' in resp['result']['result']
-    if not is_busy:
+    is_idle = 'objectId' in resp['result']['result']
+    if is_idle:
         print('EOF')
 
 def main():
