@@ -30,9 +30,8 @@ import google.genai
 import openai
 import tbdump
 
-OLLAMA_URL = 'http://vcserv2:11434/api/generate'
-OLLAMA_MODEL = 'ministral-3:8b'
-OLLAMA_MODEL = 'gpt-oss'
+OLLAMA_URL = 'http://vcserv:11434/api/generate'
+OLLAMA_MODEL = 'gemma4:26b'
 
 INSTRUCTIONS = """\
 # Role
@@ -71,6 +70,18 @@ INSTRUCTIONS = """\
 
 誤解されることが多い概念には、
 どのように誤解されることが多いか例とともに示してください。
+
+提示された言説に対し、
+まず論理的な一貫性を厳格に検証してください。
+感情論、
+慣習、
+または既得権益に基づく「論理の飛躍」や「言説のすり替え」がある場合は、
+それを明確に指摘してください。
+特定の対象が特別視されている場合、
+他の類似対象との比較において二重基準が生じていないか、
+公平な評価軸に基づき分析してください。
+「社会のため」「弱者のため」といった情緒的なレトリックの背後にある、
+発信者の戦略的意図や利害関係を客観的に解体してください。
 
 もし可能であれば、
 より深く学ぶために役立つと思われる、
@@ -117,31 +128,13 @@ class Ollama:
 
     def list_models(self):
         print("""\
-deepseek-coder:6.7b
-deepseek-coder-v2:16b
-deepseek-r1:14b
-deepseek-r1:14b-jpn
-deepseek-r1:1.5b
-deepseek-r1:7b
-deepseek-r1:8b
-gemma3:12b-it-qat
-gemma3:12b-it-qat-jp
-gemma3:1b-it-qat
-gemma3:27b-it-qat
-gemma3:4b-it-qat
-ministral-3:14b-instruct-2512-q4_K_M
-ministral-3:3b
-ministral-3:8b-instruct-2512-q4_K_M
-phi4:14b
-phi4:15b-q3_K_M
-qwen2.5:3b
-qwen2.5:7b
-qwen2.5-coder:14b
-qwen2.5-coder:7b
-qwen3:14b
-qwen3:4b
-qwen3:8b
-""")
+NAME               ID              SIZE      MODIFIED       
+qwen3.5:27b        7653528ba5cb    17 GB     12 minutes ago    
+kimi-k2.5:cloud    6d1c3246c608    -         54 minutes ago    
+gemma4:31b         6316f0629137    19 GB     19 hours ago      
+gpt-oss:latest     17052f91a42e    13 GB     19 hours ago      
+gemma4:e4b         c6eb396dbd59    9.6 GB    19 hours ago      
+gemma4:26b         5571076f3d70    17 GB     20 hours ago""")
 
     def _print(self, buf):
         sys.stdout.write(buf)
@@ -162,8 +155,8 @@ qwen3:8b
         prompt = self.expand_macros(prompt)
         payload = {
             'model': self.model, 'system': self.inst, 'prompt': prompt,
-            'stream': True, 'num_predict': self.max_tokens, 'options':
-            {'temperature': self.temp, 'num_ctx': 4096 * 2}
+            'stream': True, 'num_predict': self.max_tokens, 'think': False,
+            'options': {'temperature': self.temp, 'num_ctx': 4096 * 2}
         }
         response = requests.post(OLLAMA_URL,
                                  json=payload,
@@ -190,29 +183,28 @@ qwen3:8b
 class ChatGPT(Ollama):
     def __init__(self, model=None, *args, **kwargs):
         if model is None:
-            model = 'gpt-4.1-mini'
+            model = 'gpt-5.4-mini'
         super().__init__(model=model, *args, **kwargs)
         self.client = openai.OpenAI()
 
     def list_models(self):
         print("""\
 model          output  intel  speed  cutoff
-gpt-4.1-nano   $0.4    2      5      2024-06-01
-gpt-4o-mini    $0.6    2      4      2023-10-01
-gpt-4.1-mini   $1.6    3      4      2024-06-01
 gpt-5-nano     $0.4    2      5      2024-05-31
+gpt-5.4-nano   $1.25   2      5      2025-08-31
 gpt-5-mini     $2      3      4      2024-05-31
-o1-mini        $4.4    R3     2      2023-10-01
+o4-mini        $4.4    R4     3      2025-06-01
 o3-mini        $4.4    R4     3      2024-10-01
-o4-mini        $4.4    R4     3      2024-06-01
-o3             $8      R5     1      2024-06-01
+gpt-5.4-mini   $4.5    3      4      2025-08-31
+o3             $8      R5     2      2024-06-01
+gpt-5.1        $10     4      4      2024-09-30
+gpt-5.2        $14     4      4      2025-08-31
+gpt-5.4        $15     5      4      2025-08-31
 gpt-4o         $10     3      3      2023-10-01
-gpt-5.1        $10     4      4      2025-04-01
-gpt-5.2	       $14     4      4      2025-08-31
 gpt-4-turbo    $30     2      3      2023-12-01
 o1             $60     R4     1      2023-10-01
-gpt-5.2-pro    $168    4      1      2025-08-31
-""")
+gpt-5.4-pro    $90     5      2      2025-08-31
+gpt-5.2-pro    $168    5      1      2025-08-31""")
 
     def send_prompt(self, prompt, outfile):
         prompt = self.expand_macros(prompt)
@@ -243,7 +235,7 @@ gpt-5.2-pro    $168    4      1      2025-08-31
 class Gemini(Ollama):
     def __init__(self, model=None, *args, **kwargs):
         if model is None:
-            model = 'gemini-flash-preview'
+            model = 'gemini-3.1-flash'
         super().__init__(model=model, *args, **kwargs)
         api_key = os.environ.get('GOOGLE_API_KEY')
         self.client = google.genai.Client(api_key=api_key)
@@ -259,14 +251,16 @@ class Gemini(Ollama):
     def list_models(self):
         print("""\
 model                          output   input    speed        context
-gemini-2.5-flash               $0.2     $0.05    Fastest      2M
-gemini-1.5-flash               $0.3     $0.075   Fast         2M
-gemini-3-flash-preview         $3       $0.5
-gemini-1.5-pro                 $10.5    $3.5     Medium       2M
-gemini-3-pro-preview           $12      $2       Variable*    1M
-imagen-4.0-generate-001        $0.04    n/a      n/a          n/a
-imagen-4.0-ultra-generate-001  $0.06    n/a      n/a          n/a
-gemini-3-pro-image-preview     $0.134   n/a      n/a          n/a""")
+gemini-3.1-flash-lite-preview  $1.5     $0.25    Instant      1M
+gemini-3.1-flash               $3       $0.5     Fastest      1M
+gemini-2.5-flash               $2.5     $0.3     Fast         2M
+gemini-3.1-pro-preview         $12* $2* Variable** 1M
+gemini-2.5-pro                 $10      $1.25    Medium       2M
+imagen-4.0-fast                $0.02    n/a      Fast         n/a
+imagen-4.0-standard            $0.04    n/a      Medium       n/a
+gemini-3.1-flash-image-preview $0.067   $0.25    Fast         128k
+gemini-3-pro-image-preview     $0.134   $2       Medium       65k
+""")
 
     def _safety_settings(self):
         setting = google.genai.types.SafetySetting
