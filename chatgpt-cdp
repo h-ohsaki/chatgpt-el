@@ -70,11 +70,13 @@ CONFIGS = {
 
 def usage():
     die(f"""\
-usage: {sys.argv[0]} [-e engine] [-i] [-s prompt] [-r]
-  -e engine   AI engine (default: ChatGPT)
-  -i          open the AI engine in the browser
-  -s prompt   submit the prompt to the AI engine
-  -r          retrieve the current response in HTML format
+usage: {sys.argv[0]} [-v] [-I] [-e engine] [-m model] [-s prompt] [-r]
+  -v              enable verbose mode
+  -I              open the AI engine in the browser and exit
+  -e engine       AI engine to use (e.g., chatgpt, gemini, claude) (default: chatgpt)
+  -m model        specify a model (if supported by the engine)
+  -s prompt       submit the specified prompt to the AI engine
+  -r              Retrieve the current response in HTML format
 """)
 
 id_counter = itertools.count(1)
