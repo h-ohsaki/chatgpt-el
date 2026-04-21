@@ -40,7 +40,7 @@ CONFIGS = {
         url='https://chatgpt.com',
         form_sel='div#prompt-textarea',
         button_sel='button#composer-submit-button[data-testid="send-button"]',
-        response_sel='article > h6 + div'),
+        response_sel='[data-message-author-role="assistant"]'),
     'gemini':
     Config(url='https://gemini.google.com/',
            form_sel='div.textarea',
