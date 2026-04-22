@@ -31,20 +31,23 @@ import websocket
 
 DEFAULT_TIMEOUT = 10
 
-Config = collections.namedtuple(
-    'Config', 'url form_sel button_sel response_sel')
+Config = collections.namedtuple('Config',
+                                'url form_sel button_sel response_sel')
 
 CONFIGS = {
     'chatgpt':
     Config(
         url='https://chatgpt.com',
         form_sel='div#prompt-textarea',
-        button_sel='button#composer-submit-button[data-testid="send-button"]',
-        response_sel='[data-message-author-role="assistant"]'),
+        button_sel=
+        'button[data-testid="send-button"], button[data-testid="stop-button"], button[data-testid="fruitjuice-send-button"], button[data-testid="fruitjuice-stop-button"]',
+        response_sel=
+        '[data-message-author-role="assistant"], .agent-turn article'),
     'gemini':
     Config(url='https://gemini.google.com/',
            form_sel='div.textarea',
-           button_sel='button[aria-label="Send message"]',
+           button_sel=
+           'button[aria-label="Send message"], button[aria-label*="Stop"]',
            response_sel='response-container'),
     'openwebui':
     Config(url='http://vcserv:8080/',
@@ -54,17 +57,19 @@ CONFIGS = {
     'claude':
     Config(url='https://claude.ai/',
            form_sel='p[data-placeholder]',
-           button_sel='button[aria-label="Send message"]',
+           button_sel=
+           'button[aria-label="Send message"], button[aria-label*="Stop"]',
            response_sel='div[data-test-render-count]'),
     'copilot':
     Config(url='https://copilot.microsoft.com/',
            form_sel='textarea[placeholder="Message Copilot"]',
-           button_sel='button[aria-label="Submit message"]',
+           button_sel=
+           'button[aria-label="Submit message"], button[aria-label*="Stop"]',
            response_sel='div[role="article"]'),
     'copilot-enterprise':
     Config(url='https://m365.cloud.microsoft/chat/',
            form_sel='span[aria-label="Message Copilot"]',
-           button_sel='button[aria-label="Send"]',
+           button_sel='button[aria-label="Send"], button[aria-label*="Stop"]',
            response_sel='div[data-testid="markdown-reply"]'),
 }
 
@@ -110,14 +115,12 @@ def wait_until_visible(ws, selector):
     raise TimeoutError
 
 def open_wsocket(config):
-    # Identify the first page.
     resp = requests.get('http://127.0.0.1:9000/json/list',
                         timeout=DEFAULT_TIMEOUT)
     pages = reversed([elem for elem in resp.json() if elem['type'] == 'page'])
     for page in pages:
         if config.url in page.get('url'):
             break
-    # Create a WebScoket connection to the page.
     url = page.get('webSocketDebuggerUrl')
     ws = websocket.create_connection(url)
     cdb_send(ws, 'Page.enable')
@@ -128,32 +131,42 @@ def open_wsocket(config):
 def send_prompt(config, prompt):
     ws = open_wsocket(config)
 
-    # Fill the textare with the prompt.
     wait_until_visible(ws, config.form_sel)
     js = f"document.querySelector('{config.form_sel}').focus();"
-    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+    cdb_send(ws, 'Runtime.evaluate', {'expression': js})
     cdb_send(ws, 'Input.insertText', {'text': prompt})
 
-    # Click the submit button.
     wait_until_visible(ws, config.button_sel)
     js = f"document.querySelector('{config.button_sel}').click();"
-    resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
+    cdb_send(ws, 'Runtime.evaluate', {'expression': js})
 
 def recv_response(config):
     ws = open_wsocket(config)
 
-    # Dump the inner-html of the last response.
     wait_until_visible(ws, config.response_sel)
-    js = f"Array.from(document.querySelectorAll('{config.response_sel}')).slice(-1)[0].innerHTML"
+    js = f"""
+(() => {{
+    const nodes = Array.from(document.querySelectorAll('{config.response_sel}'))
+        .filter(el => (el.innerText || '').trim().length > 0);
+    const last = nodes[nodes.length - 1];
+    return last ? last.innerHTML : null;
+}})()
+"""
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
-    content = resp['result']['result']['value']
+    content = resp['result']['result'].get('value')
     print(content)
 
-    # Check if submit button is visible.
-    js = f"document.querySelector('{config.button_sel}');"
+    js = f"""
+(() => {{
+    const btn = document.querySelector('{config.button_sel}');
+    if (!btn) return null;
+    return (btn.getAttribute('data-testid') || '') + ' ' +
+           (btn.getAttribute('aria-label') || '');
+}})()
+"""
     resp = cdb_send(ws, 'Runtime.evaluate', {'expression': js})
-    is_idle = 'objectId' in resp['result']['result']
-    if is_idle:
+    state = (resp['result']['result'].get('value') or '').lower()
+    if 'stop' not in state:
         print('EOF')
 
 def main():
