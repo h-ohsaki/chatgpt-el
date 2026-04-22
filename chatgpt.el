@@ -32,10 +32,10 @@
 ;;; User Configuration
 
 (defvar chatgpt-prog "~/src/chatgpt-el/chatgpt-cdp")
-(defvar chatgpt-default-engine "gemini")
+(defvar chatgpt-default-engine "chatgpt")
 
 (defvar chatgpt-api-prog "~/src/chatgpt-el/chatgpt-api")
-(defvar chatgpt-default-api-engine "chatgpt")
+(defvar chatgpt-default-api-engine "ollama")
 
 (defvar chatgpt-browser-prog "qutebrowser")
 (defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9000"))
@@ -48,7 +48,8 @@
     (?s . "Summarize the following in Japanese in a plain academic writing style:")
     (?S . "Select interesting or noteworthy information from the following and present five items in a ranked list in Japanese:")
     (?j . "Translate the following in Japanese in a plain academic writing style:")
-    (?e . "Translate the following in English in a plain academic writing style:")
+    (?e . "Translate the following in English in a plain academic writing style.  Output only the translation; do not output any text other than the translation:")
+    (?f . "Format the following into a human-readable format (plain text):")
     (?p . "Proofread the following and provide a list of changes made in Markdown table:")
     (?r . "Rewrite the following in a plain academic writing style:")
     (?E . "Review and identify errors in the following document/program:")
@@ -56,29 +57,72 @@
   "Alist of prompt prefixes.")
 
 (defvar chatgpt-model-alist
-  '(("chatgpt" . "ChatGPT-5.2")
+  '(("chatgpt" . "ChatGPT-5.3")
     ("gemini" . "Gemini-3")
-    ("openwebui" . "ministral-3:14b-instruct-2512-q4_K_M")
+    ("openwebui" . "gemma4:31b")
     ("claude" . "ClaudeSonnet-4.5")
     ("copilot" . "Copilot-Auto")
     ("copilot-enterprise" . "Copilot-Auto")))
 
 (defvar chatgpt-api-model-alist
-  '(("chatgpt" . "gpt-4.1-mini")
-    ("gemini" . "gemini-3-flash-preview")
-    ("ollama" . "ministral-3:14b")))
+  '(("chatgpt" . "gpt-5.4-mini")
+    ("gemini" . "gemini-3-flash")
+    ("ollama" . "gemma4:26b")))
 
-(defvar chatgpt-api-available-models-alist
-  '(("chatgpt" . ("gpt-5.2" "gpt-5.1" "gpt-5-mini" "gpt-4.1" "gpt-4.1-mini"))
-    ("gemini" . ("gemini-3-pro-preview" "gemini-3-flash-preview"
-		 "gemini-2.5-pro" "gemini-2.5-flash" "gemini-2.5-flash-lite"
-		 "gemini-2.0-flash" "gemini-2.0-flash-lite"))
-    ("ollama" .  ("gemma3:12b-it-qat-jp" "gemma3:4b-it-qat"
-		  "phi4:15b-q3_K_M" "phi4:14b"
-		  "qwen3:14b" "qwen3:8b" "qwen3:4b"
-		  "deepseek-r1:14b-jpn"
-		  "ministral-3:14b-instruct-2512-q4_K_M" "ministral-3:8b-instruct-2512-q4_K_M"
-		  "deepseek-coder-v2:16b" "qwen2.5-coder:14b"))))
+;; (chatgpt--extract-models "model output\nfoo 1\nbar 2\n")
+
+(defun chatgpt--extract-models (model-info)
+  (let* ((lines (cdr (split-string model-info "\n" t))))
+    (mapcar (lambda (line)
+	      (car (split-string line "[ \t]+" t)))
+	    lines)))
+
+(defvar chatgpt-api-chatgpt-models
+  (chatgpt--extract-models "\
+model          output  intel  speed  cutoff
+gpt-5-nano     $0.4    2      5      2024-05-31
+gpt-5.4-nano   $1.25   2      5      2025-08-31
+gpt-5-mini     $2      3      4      2024-05-31
+o4-mini        $4.4    R4     3      2025-06-01
+o3-mini        $4.4    R4     3      2024-10-01
+gpt-5.4-mini   $4.5    3      4      2025-08-31
+o3             $8      R5     2      2024-06-01
+gpt-5.1        $10     4      4      2024-09-30
+gpt-5.2        $14     4      4      2025-08-31
+gpt-5.4        $15     5      4      2025-08-31
+gpt-4o         $10     3      3      2023-10-01
+gpt-4-turbo    $30     2      3      2023-12-01
+o1             $60     R4     1      2023-10-01
+gpt-5.4-pro    $90     5      2      2025-08-31
+gpt-5.2-pro    $168    5      1      2025-08-31"))
+
+(defvar chatgpt-api-gemini-models
+  (chatgpt--extract-models "\
+model                          output   input    speed        context
+gemini-3.1-flash-lite-preview  $1.5     $0.25    Instant      1M
+gemini-3.1-flash               $3       $0.5     Fastest      1M
+gemini-2.5-flash               $2.5     $0.3     Fast         2M
+gemini-3.1-pro-preview         $12* $2* Variable** 1M
+gemini-2.5-pro                 $10      $1.25    Medium       2M
+imagen-4.0-fast                $0.02    n/a      Fast         n/a
+imagen-4.0-standard            $0.04    n/a      Medium       n/a
+gemini-3.1-flash-image-preview $0.067   $0.25    Fast         128k
+gemini-3-pro-image-preview     $0.134   $2       Medium       65k"))
+
+(defvar chatgpt-api-ollama-models
+  (chatgpt--extract-models "\
+NAME               ID              SIZE      MODIFIED       
+qwen3.5:27b        7653528ba5cb    17 GB     12 minutes ago    
+kimi-k2.5:cloud    6d1c3246c608    -         54 minutes ago    
+gemma4:31b         6316f0629137    19 GB     19 hours ago      
+gpt-oss:latest     17052f91a42e    13 GB     19 hours ago      
+gemma4:e4b         c6eb396dbd59    9.6 GB    19 hours ago      
+gemma4:26b         5571076f3d70    17 GB     20 hours ago"))
+
+(defvar chatgpt-api-models-alist
+  '(("chatgpt" . chatgpt-api-chatgpt-models)
+    ("gemini" . chatgpt-api-gemini-models)
+    ("ollama" .  chatgpt-api-ollama-models)))
 
 ;;; Internal Variables (Buffer Local)
 
@@ -118,18 +162,15 @@
 
 (defun chatgpt--update-mode-name (status)
   "Update the mode name to reflect the current status."
-  (setq mode-name (format "%s%s %s %s"
-                          chatgpt--engine (if chatgpt--use-api "-api" "") chatgpt--model
-                          status))
+  (setq mode-name (format "%s %s" chatgpt--model status))
   (force-mode-line-update))
 
 ;;; Buffer Management
 
 (defun chatgpt--buffer-name (engine model use-api &optional raw)
   "Generate buffer name based on ENGINE, MODEL and USE-API."
-  (format "*%s%s %s %s*"
+  (format "*%s%s %s*"
           engine
-	  model
           (if use-api "-api" "")
           (if raw "raw" "response")))
 
@@ -226,9 +267,10 @@
 
       (let* ((prog (if use-api chatgpt-api-prog chatgpt-prog))
              (args (list "-e" engine "-m" model))
-             (proc (apply 'start-process engine buf prog args)))
+             (proc (apply 'start-process engine buf prog args))
+	     (encoded-prompt (encode-coding-string prompt 'utf-8)))
 	(setq chatgpt--process proc)
-        (process-send-string proc (concat prompt "\n"))
+        (process-send-string proc (concat encoded-prompt "\n"))
 	(process-send-eof proc))
 	
       (set-process-filter chatgpt--process 'chatgpt--process-filter)
@@ -305,7 +347,8 @@
 	    (engine chatgpt--engine))
         (with-current-buffer raw-buf
           (erase-buffer)
-          (let ((proc (start-process "chatgpt-monitor" raw-buf
+          (let* ((default-directory (expand-file-name "~"))
+		 (proc (start-process "chatgpt-monitor" raw-buf
                                      chatgpt-prog "-e" engine "-r")))
 	    (setq chatgpt--monitor-process proc)
             ;; Save the target response buffer in the process object for the sentinel
@@ -363,14 +406,13 @@ prefix."
 	 (model (cdr (assoc engine (if use-api chatgpt-api-model-alist chatgpt-model-alist))))
          (prompt (chatgpt--find-prompt)))
     (when arg
-      (let* ((ch (read-char "Prefix [w]hat/[s]ummary/[S]ummary/[j]a/[e]n/[p]roof/[r]ewrite/[E]rror/[R]efactor: "))
+      (let* ((ch (read-char "Prefix [w]hat/[s]ummary/[S]ummary/[j]a/[e]n/[f]ormat/[p]roof/[r]ewrite/[E]rror/[R]efactor: "))
              (entry (assoc ch chatgpt-prefix-alist)))
         (setq prefix (cdr entry))))
     (with-temp-buffer
       (insert prompt)
       (chatgpt--expand-macros)
       (setq prompt (buffer-string)))
-    
     (chatgpt--send-prompt (concat prefix prompt) engine model use-api)))
 
 (defun chatgpt-send-api (arg)
@@ -437,13 +479,13 @@ API engine; without ARG, change the default engine for Web."
   (interactive)
   (let* ((engine chatgpt-default-api-engine)
 	 (model (cdr (assoc engine chatgpt-api-model-alist)))
-	 (all-models (cdr (assoc engine chatgpt-api-available-models-alist)))
+	 (all-models (symbol-value (cdr (assoc engine chatgpt-api-models-alist))))
 	 (selected (completing-read (format "Select API model for %s [%s]: "
 					    engine
 					    model)
                                     all-models
 				    nil t)))
     (when (not (string= selected ""))
-      (setf (alist-get engine chatgpt-api-model-alist ni nil 'equal) selected))))
+      (setf (alist-get engine chatgpt-api-model-alist nil nil 'equal) selected))))
 
 (provide 'chatgpt)
