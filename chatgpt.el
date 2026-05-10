@@ -458,6 +458,51 @@ Strictly exclude any other output.
 			 (substring buf (1- pnt)))))
     (chatgpt--send-prompt (concat prefix prompt) engine model t)))
 
+(defvar-local chatgpt--translate-beg nil)
+(defvar-local chatgpt--translate-end nil)
+(defvar-local chatgpt--translate-orig-buf nil)
+(defvar-local chatgpt--translate-orig-sentinel nil)
+
+(defun chatgpt--translate-sentinel (proc event)
+  "Sentinel for `chatgpt-translate' that replaces the original region."
+  (let* ((response-buf (process-buffer proc))
+         (orig-sentinel (with-current-buffer response-buf chatgpt--translate-orig-sentinel))
+         (orig-buf (with-current-buffer response-buf chatgpt--translate-orig-buf))
+         (beg (with-current-buffer response-buf chatgpt--translate-beg))
+         (end (with-current-buffer response-buf chatgpt--translate-end)))
+    (when orig-sentinel
+      (funcall orig-sentinel proc event))
+    (when (string-match "finished" event)
+      (let ((response (with-current-buffer response-buf
+                        (string-trim (buffer-string)))))
+        (with-current-buffer orig-buf
+          (delete-region beg end)
+          (goto-char beg)
+          (insert response))))))
+
+(defun chatgpt-translate ()
+  "Translate the prompt near the point into English and replace it."
+  (interactive)
+  (let* ((prefix (cdr (assoc ?e chatgpt-prefix-alist)))
+         (engine chatgpt-default-api-engine)
+         (model (cdr (assoc engine chatgpt-api-model-alist)))
+         (beg (cond (mark-active (region-beginning))
+                    ((looking-at "\\w") (save-excursion (beginning-of-thing 'word) (point)))
+                    (t (save-excursion (backward-paragraph) (skip-chars-forward "\n") (point)))))
+         (end (cond (mark-active (region-end))
+                    ((looking-at "\\w") (save-excursion (end-of-thing 'word) (point)))
+                    (t (save-excursion (forward-paragraph) (skip-chars-backward "\n") (point)))))
+         (prompt (chatgpt--find-prompt))
+         (orig-buf (current-buffer)))
+    (chatgpt--send-prompt (concat prefix " " prompt) engine model t)
+    (let ((proc (get-buffer-process chatgpt--last-buf)))
+      (with-current-buffer (process-buffer proc)
+        (setq chatgpt--translate-beg beg)
+        (setq chatgpt--translate-end end)
+        (setq chatgpt--translate-orig-buf orig-buf)
+        (setq chatgpt--translate-orig-sentinel (or (process-sentinel proc) #'ignore)))
+      (set-process-sentinel proc #'chatgpt--translate-sentinel))))
+
 ;; (chatgpt-select-engine nil)
 ;; (chatgpt-select-engine t)
 (defun chatgpt-select-engine (use-api)
