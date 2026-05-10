@@ -57,9 +57,9 @@
   "Alist of prompt prefixes.")
 
 (defvar chatgpt-model-alist
-  '(("chatgpt" . "ChatGPT-5.3")
+  '(("chatgpt" . "ChatGPT-5.5")
     ("gemini" . "Gemini-3")
-    ("openwebui" . "gemma4:31b")
+    ("openwebui" . "gemma4:26b")
     ("claude" . "ClaudeSonnet-4.5")
     ("copilot" . "Copilot-Auto")
     ("copilot-enterprise" . "Copilot-Auto")))
@@ -111,13 +111,15 @@ gemini-3-pro-image-preview     $0.134   $2       Medium       65k"))
 
 (defvar chatgpt-api-ollama-models
   (chatgpt--extract-models "\
-NAME               ID              SIZE      MODIFIED       
-qwen3.5:27b        7653528ba5cb    17 GB     12 minutes ago    
-kimi-k2.5:cloud    6d1c3246c608    -         54 minutes ago    
-gemma4:31b         6316f0629137    19 GB     19 hours ago      
-gpt-oss:latest     17052f91a42e    13 GB     19 hours ago      
-gemma4:e4b         c6eb396dbd59    9.6 GB    19 hours ago      
-gemma4:26b         5571076f3d70    17 GB     20 hours ago"))
+NAME                      ID              SIZE      MODIFIED    
+gpt-oss:20b               17052f91a42e    13 GB     2 days ago     
+qwen3.5-limited:latest    a9b999f6970c    17 GB     2 weeks ago    
+qwen3.5:27b               7653528ba5cb    17 GB     2 weeks ago    
+kimi-k2.5:cloud           6d1c3246c608    -         2 weeks ago    
+gemma4:31b                6316f0629137    19 GB     2 weeks ago    
+gemma4:e4b                c6eb396dbd59    9.6 GB    2 weeks ago    
+gemma4:26b                5571076f3d70    17 GB     2 weeks ago    
+"))
 
 (defvar chatgpt-api-models-alist
   '(("chatgpt" . chatgpt-api-chatgpt-models)
