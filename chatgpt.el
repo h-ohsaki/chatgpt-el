@@ -111,14 +111,16 @@ gemini-3-pro-image-preview     $0.134   $2       Medium       65k"))
 
 (defvar chatgpt-api-ollama-models
   (chatgpt--extract-models "\
-NAME                      ID              SIZE      MODIFIED    
-gpt-oss:20b               17052f91a42e    13 GB     2 days ago     
-qwen3.5-limited:latest    a9b999f6970c    17 GB     2 weeks ago    
-qwen3.5:27b               7653528ba5cb    17 GB     2 weeks ago    
-kimi-k2.5:cloud           6d1c3246c608    -         2 weeks ago    
-gemma4:31b                6316f0629137    19 GB     2 weeks ago    
-gemma4:e4b                c6eb396dbd59    9.6 GB    2 weeks ago    
-gemma4:26b                5571076f3d70    17 GB     2 weeks ago    
+NAME                                                          ID              SIZE      MODIFIED
+qwen3.6:27b                                                   a50eda8ed977    17 GB     4 minutes ago
+qwen3-coder-30b-a3b-q4:latest                                 30b7981a1115    17 GB     4 days ago
+hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL    30b7981a1115    17 GB     4 days ago
+gemma4:26b                                                    5571076f3d70    17 GB     4 days ago
+hhao/qwen2.5-coder-tools:14b                                  8897bf4e1dc7    9.0 GB    8 days ago
+gpt-oss:20b                                                   17052f91a42e    13 GB     2 weeks ago
+gemma4:e4b                                                    c6eb396dbd59    9.6 GB    4 weeks ago
+qwen2.5-coder:7b
+qwen3:30b-a3b
 "))
 
 (defvar chatgpt-api-models-alist
@@ -384,7 +386,7 @@ gemma4:26b                5571076f3d70    17 GB     2 weeks ago
                      (last-start (if win (window-start win))))
                 (erase-buffer)
                 (insert response)
-                (shr-render-region (point-min) (point-max))
+		(shr-render-region (point-min) (point-max))
                 (chatgpt--monitor-format-buffer)
                 (when win
                   (set-window-point win last-pnt)
@@ -393,7 +395,7 @@ gemma4:26b                5571076f3d70    17 GB     2 weeks ago
                 (setq chatgpt--monitor-ntries 0)))
 
             (if (or (string-suffix-p "\nEOF\n" response)
-                    (>= chatgpt--monitor-ntries 50))
+                    (>= chatgpt--monitor-ntries 150)) ;; .2 secs x 150 = 30 secs
                 (chatgpt--response-finished)
               (chatgpt--sched-monitor-event))))))))
 
@@ -440,14 +442,10 @@ prefix."
   (interactive)
   (let* ((pnt (point))
          (buf (buffer-string))
-         (prefix "Appropriately fill in the __FILL_THIS_PART__ placeholder in the following document with the corresponding text or program.
-If the document is a program, complete the code.
-If it is a general document, complete the text.
-If it is an email, compose a reply;
-note that the sender's message is quoted with a leading '> '.
-Write in the same language as the source document.
-Output only the content to be inserted into __FILL_THIS_PART__.
-Strictly exclude any other output.
+         (prefix "___ 以下の __FILL_THIS_PART__ を埋めて。
+分量は前後のテキストの文脈から適切に決めて。
+テキストがメールの場合はメールに対する返信として書いて。
+記入するテキストだけを答えて。
 
 ---
 ")
@@ -456,6 +454,7 @@ Strictly exclude any other output.
          (prompt (concat (substring buf 0 (1- pnt))
 			 "__FILL_THIS_PART__"
 			 (substring buf (1- pnt)))))
+    (setq xxx (concat prefix prompt))
     (chatgpt--send-prompt (concat prefix prompt) engine model t)))
 
 (defvar-local chatgpt--translate-beg nil)
