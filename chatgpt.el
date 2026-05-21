@@ -28,6 +28,7 @@
 ;; C-c E          Select AI engine.
 
 (require 'shr)
+(require 'thingatpt)
 
 ;;; User Configuration
 
@@ -130,7 +131,6 @@ qwen3:30b-a3b
 
 ;;; Internal Variables (Buffer Local)
 
-(defvar chatgpt--last-buf nil)
 ;; Make variables buffer-local to support parallel execution across different buffers.
 (defvar-local chatgpt--engine nil)
 (defvar-local chatgpt--model nil)
@@ -141,6 +141,11 @@ qwen3:30b-a3b
 (defvar-local chatgpt--monitor-timer nil)
 (defvar-local chatgpt--monitor-ntries 0)
 (defvar-local chatgpt--last-raw-response nil)
+(defvar-local chatgpt--buf nil
+  "The response buffer associated with the current buffer." )
+(defvar-local chatgpt--orig-buf nil
+  "The buffer from which `chatgpt--send-prompt` is invoked")
+(defvar-local chatgpt-response-finished-hook nil)
 
 (defvar chatgpt-font-lock-keywords
   '(("^[;%].+" . font-lock-comment-face)
@@ -184,7 +189,8 @@ qwen3:30b-a3b
     (get-buffer-create buf-name)))
 
 (defun chatgpt--init-buffer (engine model use-api)
-  "Initialize the response buffer with local variables."
+  "Initialize the response buffer with local variables.  Ensure the buffer
+is clean and the mode is correctly set."
   (let ((buf (chatgpt--get-buffer-create engine model use-api)))
     (with-current-buffer buf
       (let ((proc (get-buffer-process buf)))
@@ -196,12 +202,12 @@ qwen3:30b-a3b
       (setq chatgpt--engine engine)
       (setq chatgpt--model model)
       (setq chatgpt--use-api use-api)
+      (setq chatgpt-response-finished-hook nil)
+      ;;
       (chatgpt--update-mode-name "streaming")
       (erase-buffer)
-      ;; Display in the other window
-      (delete-other-windows)
-      (split-window)
-      (set-window-buffer (next-window) buf))
+      ;; Display in the other window.
+      (display-buffer buf))
     buf))
 
 ;;; Utilities
@@ -214,7 +220,7 @@ qwen3:30b-a3b
       (replace-match newtext))))
 
 (defun chatgpt--expand-macros ()
-  "Expand macros in the current buffer."
+  "Expand macros (`[[filename]]`) in the current buffer."
   (save-excursion
     (goto-char (point-min))
     (while (re-search-forward "\\[\\[\\([^]]+\\)\\]\\]" nil t)
@@ -223,20 +229,28 @@ qwen3:30b-a3b
           (replace-match "")
           (insert-file-contents filename))))))
 
-(defun chatgpt--find-prompt ()
+(defun chatgpt--find-prompt-region ()
   "Find the prompt based on the current point or selected region."
-  (let (beg end prompt)
+  (let (beg end)
     (cond
      (mark-active
-      (setq beg (region-beginning) end (region-end)
-            prompt (buffer-substring-no-properties beg end)))
+      (cons (region-beginning) (region-end)))
      ((looking-at "\\w")
-      (setq prompt (thing-at-point 'word)))
+      (bounds-of-thing-at-point 'word))
      (t
-      (setq prompt (string-trim (or (thing-at-point 'paragraph) "")))))
-    (replace-regexp-in-string "^Q\\. *" "" prompt)))
+      (bounds-of-thing-at-point 'paragraph)))))
 
+(defun chatgpt--find-prompt ()
+  "Return the prompt around the point."
+  (let ((bounds (chatgpt--find-prompt-region)))
+    (unless bounds
+      (user-error "No prompt found at point"))
+    (buffer-substring-no-properties (car bounds) (cdr bounds))))
+
+;; (chatgpt--port-listening-p "localhost" 9000)
 (defun chatgpt--port-listening-p (host port)
+  "Check if a network stream can be established at the specified HOST and
+PORT."
   (let ((connected nil))
     (condition-case nil
 	(let ((proc (open-network-stream "chatgpt" nil host port)))
@@ -248,39 +262,40 @@ qwen3:30b-a3b
 (defun chatgpt--start-browser ()
   "Start web browser if not running."
   (unless chatgpt--use-api
-      (unless (chatgpt--port-listening-p "localhost" 9000)
-        (apply 'start-process chatgpt-browser-prog nil
-	       chatgpt-browser-prog chatgpt-browser-args)
-          (while (not (chatgpt--port-listening-p "localhost" 9000))
-            (sleep-for .5)))))
+    (unless (chatgpt--port-listening-p "localhost" 9000)
+      (apply 'start-process chatgpt-browser-prog nil
+	     chatgpt-browser-prog chatgpt-browser-args)
+      (while (not (chatgpt--port-listening-p "localhost" 9000))
+        (sleep-for .5)))))
 
 ;;; Process Handling (Send & Receive)
 
 (defun chatgpt--send-prompt (prompt engine model use-api)
-  "Send PROMPT to the AI using specified configuration."
-  (let ((buf (chatgpt--init-buffer engine model use-api)))
-
+  "Send PROMPT to the AI using specified configuration.  Initialize the
+response buffer and start the monitor process for non-API mode."
+  (let ((buf (chatgpt--init-buffer engine model use-api))
+	(orig-buf (current-buffer)))
     (with-current-buffer buf
-      (chatgpt--stop-monitor) ;; Stop existing monitor in THIS buffer
-      (chatgpt--start-monitor)
-
+      (chatgpt--stop-monitor) ;; Stop existing monitor in THIS buffer.
       (when (and chatgpt--process (process-live-p chatgpt--process))
         (kill-process chatgpt--process))
-
       (chatgpt--start-browser)
-
+      ;; Start the process for communication with the browser.  Send the
+      ;; prompt to the STDIN of the process.
       (let* ((prog (if use-api chatgpt-api-prog chatgpt-prog))
              (args (list "-e" engine "-m" model))
              (proc (apply 'start-process engine buf prog args))
 	     (encoded-prompt (encode-coding-string prompt 'utf-8)))
 	(setq chatgpt--process proc)
+	(set-process-filter proc 'chatgpt--process-filter)
+	(set-process-sentinel proc 'chatgpt--process-sentinel)
         (process-send-string proc (concat encoded-prompt "\n"))
 	(process-send-eof proc))
-	
-      (set-process-filter chatgpt--process 'chatgpt--process-filter)
-      (set-process-sentinel chatgpt--process 'chatgpt--process-sentinel)
       (setq chatgpt--prompt prompt)
-      (setq chatgpt--last-buf buf))))
+      (setq chatgpt--orig-buf orig-buf)
+      (chatgpt--start-monitor))
+    (setq chatgpt--buf buf) ;; Bounded to the originali buffer.
+    ))
 
 (defun chatgpt--process-filter (proc string)
   "Process the output STRING from the process PROC."
@@ -288,27 +303,34 @@ qwen3:30b-a3b
     (with-current-buffer (process-buffer proc)
       (save-excursion
         (goto-char (point-max))
-        (insert string)
-        ;; Hide emphasis tags.
-        (goto-char (point-min))
-        (while (re-search-forward "\\(\\*\\*\\).+?\\(\\*\\*\\)" nil t)
-          (put-text-property (match-beginning 1) (match-end 1) 'invisible t)
-          (put-text-property (match-beginning 2) (match-end 2) 'invisible t))))))
+	(let ((beg (point)))
+	  (insert string)
+          ;; Make emphasis tags invisible.
+	  (goto-char beg)
+          (while (re-search-forward "\\(\\*\\*\\).+?\\(\\*\\*\\)" nil t)
+            (put-text-property (match-beginning 1) (match-end 1) 'invisible t)
+            (put-text-property (match-beginning 2) (match-end 2) 'invisible t)))))))
 
 (defun chatgpt--process-sentinel (proc event)
   "Handle the completion EVENT of the process PROC."
-  (when (and (buffer-live-p (process-buffer proc))
-             (string-match "finished" event))
+  (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
-      (if chatgpt--use-api (chatgpt--response-finished)))))
+      (cond
+       ((string-match-p "finished" event)
+        (when chatgpt--use-api
+          (chatgpt--response-finished)))
+       (t
+        (chatgpt--update-mode-name "failed")
+        (message "chatgpt process failed: %s" (string-trim event)))))))
 
 (defun chatgpt--response-finished ()
   "Handle the completion of a prompt."
   (chatgpt--update-mode-name "finished")
-  (chatgpt--save))
+  (run-hooks 'chatgpt-response-finished-hook))
 
-(defun chatgpt--save ()
+(defun chatgpt--chat-save ()
   "Save the last prompt and response."
+  ;; NOTE: This code must be invoked from the response buffer.
   (let* ((save-silently t)
 	 (tstamp (format-time-string "%y%m%d-%H%M%S"))
          (base (format "~/var/log/chatgpt/%s-%s" chatgpt--engine tstamp))
@@ -320,6 +342,16 @@ qwen3:30b-a3b
       (with-temp-buffer
         (insert response)
         (write-region (point-min) (point-max) (concat base ".rs")))))
+
+(defun chatgpt--replace-prompt ()
+  "Replace the prompt in the original buffer with the response."
+  ;; NOTE: This code must be invoked from the response buffer.
+  (let ((prompt (string-trim chatgpt--prompt))
+	(response (buffer-string)))
+    (with-current-buffer chatgpt--orig-buf
+      (save-excursion
+	(when (re-search-backward (regexp-quote prompt) nil t)
+	  (replace-match response t t))))))
 
 ;;; Monitor (Polling) Implementation
 
@@ -362,7 +394,7 @@ qwen3:30b-a3b
 (defun chatgpt--monitor-format-buffer ()
   "Format the contents of the response buffer."
   (goto-char (point-min))
-  (insert (format "[%s]\n" chatgpt--model))
+  ;; (insert (format "[%s]\n" chatgpt--model))
   (chatgpt--replace-regexp "\n\n\\( *[0-9-] .+?\\)$" "\n\\1")
   (chatgpt--replace-regexp "\\*\\*\\(.+?\\)\\*\\*" "\\1")
   (chatgpt--replace-regexp "’" "'")
@@ -402,8 +434,7 @@ qwen3:30b-a3b
 ;;; Interactive Commands
 
 (defun chatgpt-send (arg &optional use-api)
-  "Send a prompt to the AI. With C-u, edit prompt. With C-u C-u, select
-prefix."
+  "Send a prompt to the AI. With C-u, select prefix."
   (interactive "P")
   (let* ((prefix "")
 	 (engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
@@ -426,7 +457,7 @@ prefix."
 (defun chatgpt-insert-response (&optional arg)
   "Insert the latest response."
   (interactive "P")
-  (let ((buf chatgpt--last-buf))
+  (let ((buf chatgpt--buf))
     (if (not (and buf (buffer-live-p buf)))
         (message "No active response buffer found.")
       (with-current-buffer buf
@@ -442,10 +473,10 @@ prefix."
   (interactive)
   (let* ((pnt (point))
          (buf (buffer-string))
-         (prefix "___ 以下の __FILL_THIS_PART__ を埋めて。
-分量は前後のテキストの文脈から適切に決めて。
-テキストがメールの場合はメールに対する返信として書いて。
-記入するテキストだけを答えて。
+         (prefix "Fill in the following __FILL_THIS_PART__.
+The length should be determined appropriately based on the context of the surrounding text.
+If the text is an email, write it as a reply to that email.
+Provide only the text to be inserted.
 
 ---
 ")
@@ -454,53 +485,20 @@ prefix."
          (prompt (concat (substring buf 0 (1- pnt))
 			 "__FILL_THIS_PART__"
 			 (substring buf (1- pnt)))))
-    (setq xxx (concat prefix prompt))
     (chatgpt--send-prompt (concat prefix prompt) engine model t)))
-
-(defvar-local chatgpt--translate-beg nil)
-(defvar-local chatgpt--translate-end nil)
-(defvar-local chatgpt--translate-orig-buf nil)
-(defvar-local chatgpt--translate-orig-sentinel nil)
-
-(defun chatgpt--translate-sentinel (proc event)
-  "Sentinel for `chatgpt-translate' that replaces the original region."
-  (let* ((response-buf (process-buffer proc))
-         (orig-sentinel (with-current-buffer response-buf chatgpt--translate-orig-sentinel))
-         (orig-buf (with-current-buffer response-buf chatgpt--translate-orig-buf))
-         (beg (with-current-buffer response-buf chatgpt--translate-beg))
-         (end (with-current-buffer response-buf chatgpt--translate-end)))
-    (when orig-sentinel
-      (funcall orig-sentinel proc event))
-    (when (string-match "finished" event)
-      (let ((response (with-current-buffer response-buf
-                        (string-trim (buffer-string)))))
-        (with-current-buffer orig-buf
-          (delete-region beg end)
-          (goto-char beg)
-          (insert response))))))
 
 (defun chatgpt-translate ()
   "Translate the prompt near the point into English and replace it."
   (interactive)
   (let* ((prefix (cdr (assoc ?e chatgpt-prefix-alist)))
-         (engine chatgpt-default-api-engine)
-         (model (cdr (assoc engine chatgpt-api-model-alist)))
-         (beg (cond (mark-active (region-beginning))
-                    ((looking-at "\\w") (save-excursion (beginning-of-thing 'word) (point)))
-                    (t (save-excursion (backward-paragraph) (skip-chars-forward "\n") (point)))))
-         (end (cond (mark-active (region-end))
-                    ((looking-at "\\w") (save-excursion (end-of-thing 'word) (point)))
-                    (t (save-excursion (forward-paragraph) (skip-chars-backward "\n") (point)))))
-         (prompt (chatgpt--find-prompt))
-         (orig-buf (current-buffer)))
-    (chatgpt--send-prompt (concat prefix " " prompt) engine model t)
-    (let ((proc (get-buffer-process chatgpt--last-buf)))
-      (with-current-buffer (process-buffer proc)
-        (setq chatgpt--translate-beg beg)
-        (setq chatgpt--translate-end end)
-        (setq chatgpt--translate-orig-buf orig-buf)
-        (setq chatgpt--translate-orig-sentinel (or (process-sentinel proc) #'ignore)))
-      (set-process-sentinel proc #'chatgpt--translate-sentinel))))
+	 (engine chatgpt-default-api-engine)
+	 (model (cdr (assoc engine chatgpt-api-model-alist)))
+         (prompt (chatgpt--find-prompt)))
+    (chatgpt--send-prompt (concat prefix prompt) engine model 'use-api)
+    (with-current-buffer chatgpt--buf
+      (add-hook 'chatgpt-response-finished-hook  'chatgpt--replace-prompt nil t)
+      ;; Override chatgpt--prompt with the raw prompt without prefix.
+      (setq chatgpt--prompt prompt))))
 
 ;; (chatgpt-select-engine nil)
 ;; (chatgpt-select-engine t)
@@ -509,7 +507,7 @@ prefix."
 API engine; without ARG, change the default engine for Web."
   (interactive "P")
   (let* ((engine (if use-api chatgpt-default-api-engine chatgpt-default-engine))
-	 (engines (map-keys (if use-api chatgpt-api-model-alist chatgpt-model-alist)))
+	 (engines (mapcar #'car (if use-api chatgpt-api-model-alist chatgpt-model-alist)))
 	 (selected (completing-read (format "Select %sengine [%s]: "
 					    (if use-api "API " "")
 					    engine)

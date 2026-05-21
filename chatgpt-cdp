@@ -121,8 +121,12 @@ def open_wsocket(config):
     for page in pages:
         if config.url in page.get('url'):
             break
+    if page is None:
+        raise RuntimeError('no browser page found')
     url = page.get('webSocketDebuggerUrl')
-    ws = websocket.create_connection(url)
+    if not url:
+        raise RuntimeError('webSocketDebuggerUrl not found')
+    ws = websocket.create_connection(url, timeout=DEFAULT_TIMEOUT)
     cdb_send(ws, 'Page.enable')
     if config.url not in page.get('url'):
         cdb_send(ws, 'Page.navigate', {'url': config.url})
@@ -175,14 +179,17 @@ def main():
     engine = opt.e.lower() if opt.e else 'chatgpt'
     model = opt.m
     config = CONFIGS[engine]
-    if opt.I:
-        ws = open_wsocket(config)
-        sys.exit()
-    if opt.r:
-        recv_response(config)
-    else:
-        prompt = opt.s if opt.s else sys.stdin.read().strip()
-        send_prompt(config, prompt)
+    try:
+        if opt.I:
+            ws = open_wsocket(config)
+            sys.exit()
+        if opt.r:
+            recv_response(config)
+        else:
+            prompt = opt.s if opt.s else sys.stdin.read().strip()
+            send_prompt(config, prompt)
+    except Exception as e:
+        die(f'chatgpt-cdp: {e}')
 
 if __name__ == "__main__":
     main()
