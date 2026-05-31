@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# A simple ChatGPT/Gemini/Ollama client using API.
+# A simple ChatGPT/Gemini/Llama client using API.
 # Copyright (c) 2025, Hiroyuki Ohsaki.
 # All rights reserved.
 #
@@ -30,8 +30,7 @@ import google.genai
 import openai
 import tbdump
 
-OLLAMA_URL = 'http://vcserv:11434/api/generate'
-OLLAMA_MODEL = 'gemma4:26b'
+LLAMA_URL = 'http://vcserv:8080/v1/chat/completions'
 
 INSTRUCTIONS = """\
 あなたは、論理的一貫性と事実の正確性を最優先する、客観的・批判的分析に長けた
@@ -71,18 +70,16 @@ def usage():
 usage: {sys.argv[0]} [-vl] [-e engine] [-m model] [-i inst] [-s prompt] [-O path]
   -v         verbose mode
   -l         list available modes
-  -e engine  specify engine (default: ollama)
-  -m model   specify LLM model (default: qwen-2.5:14b)
+  -e engine  specify engine (default: llama)
+  -m model   specify LLM model
   -i inst    specify system instructions
   -s prompt  prompt string
   -O path    output image filename
 """)
 
-# Ollama ----------------------------------------------------------------
-class Ollama:
-    def __init__(self, model=None, inst='', max_tokens=8192, temp=.1):
-        if model is None:
-            model = OLLAMA_MODEL
+# Llama ----------------------------------------------------------------
+class Llama:
+    def __init__(self, model=None, inst='', max_tokens=8192, temp=1.):
         self.model = model
         self.inst = inst
         self.max_tokens = max_tokens
@@ -104,16 +101,6 @@ class Ollama:
         pattern = re.compile(r'\[\[(.+?)\]\]')
         return pattern.sub(_include, astr)
 
-    def list_models(self):
-        print("""\
-NAME               ID              SIZE      MODIFIED       
-qwen3.5:27b        7653528ba5cb    17 GB     12 minutes ago    
-kimi-k2.5:cloud    6d1c3246c608    -         54 minutes ago    
-gemma4:31b         6316f0629137    19 GB     19 hours ago      
-gpt-oss:latest     17052f91a42e    13 GB     19 hours ago      
-gemma4:e4b         c6eb396dbd59    9.6 GB    19 hours ago      
-gemma4:26b         5571076f3d70    17 GB     20 hours ago""")
-
     def _print(self, buf):
         sys.stdout.write(buf)
         sys.stdout.flush()
@@ -131,53 +118,76 @@ gemma4:26b         5571076f3d70    17 GB     20 hours ago""")
 
     def send_prompt(self, prompt, outfile):
         prompt = self.expand_macros(prompt)
+
+        messages = []
+        if self.inst:
+            messages.append({
+                'role': 'system',
+                'content': self.inst,
+            })
+        messages.append({
+            'role': 'user',
+            'content': prompt,
+        })
+
+        # https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF
         payload = {
-            'model': self.model, 'system': self.inst, 'prompt': prompt,
-            'stream': True, 'num_predict': self.max_tokens, 'think': False,
-            'options': {'temperature': self.temp, 'num_ctx': 4096 * 2}
+            'messages': messages,
+            'stream': True,
+            'max_tokens': self.max_tokens,
+            'temperature': self.temp,
+            'top_p': .95,
+            'presence_penalty': 0.,
+            'extra_body': {'top_k': 20},
         }
-        response = requests.post(OLLAMA_URL,
-                                 json=payload,
-                                 stream=True,
-                                 headers={'Content-Type': 'application/json'})
+
+        response = requests.post(
+            LLAMA_URL,
+            json=payload,
+            stream=True,
+            headers={'Content-Type': 'application/json'},
+        )
+        response.encoding = 'utf-8'
+
         try:
             response.raise_for_status()
         except Exception as e:
-            die(f'{e}')
+            die(f'{e}: {response.text}')
 
-        print(f'[{self.model}]', flush=True)
         for line in response.iter_lines(decode_unicode=True):
             if not line:
                 continue
-            line = line.replace(b'\\n', b'__NEWLINE__')
-            data = json.loads(line)
-            if 'response' in data:
-                token = data['response']
-                token = token.replace('__NEWLINE__', '\n')
+
+            if line.startswith('data: '):
+                line = line[len('data: '):]
+
+            if line == '[DONE]':
+                break
+
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            choices = data.get('choices', [])
+            if not choices:
+                continue
+
+            delta = choices[0].get('delta', {})
+            token = delta.get('content')
+
+            if token:
                 self._print(token)
+
         print()
 
 # ChatGPT ----------------------------------------------------------------
-class ChatGPT(Ollama):
+class ChatGPT(Llama):
     def __init__(self, model=None, *args, **kwargs):
         if model is None:
             model = 'gpt-5.4-mini'
         super().__init__(model=model, *args, **kwargs)
         self.client = openai.OpenAI()
-
-    def list_models(self):
-        print("""\
-model          output  intel  speed  cutoff
-gpt-5-nano     $0.4    2      5      2024-05-31
-gpt-5-mini     $2      3      4      2024-05-31
-gpt-5.4-nano   $1.25   3      4      2025-08-31
-gpt-5.4-mini   $4.5    4      4      2025-08-31
-gpt-5.2        $14     5      3      2025-08-31
-gpt-5.4        $15     5      3      2025-08-31
-gpt-5.5        $30     5      4      2025-12-01
-gpt-5.2-pro    $168    5      1      2025-08-31
-gpt-5.4-pro    $180    5      1      2025-08-31
-gpt-5.5-pro    $180    5      1      2025-12-01""")
 
     def send_prompt(self, prompt, outfile):
         prompt = self.expand_macros(prompt)
@@ -195,7 +205,7 @@ gpt-5.5-pro    $180    5      1      2025-12-01""")
         except Exception as e:
             die(f'{e}')
 
-        print(f'[{self.model}]')
+        # print(f'[{self.model}]')
         for event in stream:
             try:
                 delta = event.delta
@@ -205,35 +215,13 @@ gpt-5.5-pro    $180    5      1      2025-12-01""")
         print()
 
 # Gemini ----------------------------------------------------------------
-class Gemini(Ollama):
+class Gemini(Llama):
     def __init__(self, model=None, *args, **kwargs):
         if model is None:
             model = 'gemini-3.1-flash'
         super().__init__(model=model, *args, **kwargs)
         api_key = os.environ.get('GOOGLE_API_KEY')
         self.client = google.genai.Client(api_key=api_key)
-
-    def list_all_models(self):
-        for model in self.client.models.list():
-            # Clean up model name for display (remove 'models/' prefix).
-            name = model.name.replace('models/', '')
-            disp_name = model.display_name
-            methods = ', '.join(model.supported_actions or [])
-            print(f'{name}\t{disp_name}\t{methods}')
-
-    def list_models(self):
-        print("""\
-model                          output   input    speed        context
-gemini-3.1-flash-lite-preview  $1.5     $0.25    Instant      1M
-gemini-3.1-flash               $3       $0.5     Fastest      1M
-gemini-2.5-flash               $2.5     $0.3     Fast         2M
-gemini-3.1-pro-preview         $12* $2* Variable** 1M
-gemini-2.5-pro                 $10      $1.25    Medium       2M
-imagen-4.0-fast                $0.02    n/a      Fast         n/a
-imagen-4.0-standard            $0.04    n/a      Medium       n/a
-gemini-3.1-flash-image-preview $0.067   $0.25    Fast         128k
-gemini-3-pro-image-preview     $0.134   $2       Medium       65k
-""")
 
     def _safety_settings(self):
         setting = google.genai.types.SafetySetting
@@ -263,7 +251,7 @@ gemini-3-pro-image-preview     $0.134   $2       Medium       65k
         try:
             stream = self.client.models.generate_content_stream(
                 model=self.model, contents=prompt, config=config)
-            print(f'[{self.model}]')
+            # print(f'[{self.model}]')
             for chunk in stream:
                 if chunk.text:
                     self._print(chunk.text)
@@ -321,13 +309,12 @@ gemini-3-pro-image-preview     $0.134   $2       Medium       65k
         else:
             self._send_prompt(prompt, outfile)
 
-ENGINES = {'ollama': Ollama, 'chatgpt': ChatGPT, 'gemini': Gemini}
+ENGINES = {'llama': Llama, 'chatgpt': ChatGPT, 'gemini': Gemini}
 
 def main():
-    opt = getopts('vle:m:i:s:O:') or usage()
+    opt = getopts('ve:m:i:s:O:') or usage()
     verbose = opt.v
-    do_list = opt.l
-    engine = opt.e.lower() if opt.e else 'chatgpt'
+    engine = opt.e.lower() if opt.e else 'llama'
     model = opt.m
     inst = opt.i or INSTRUCTIONS
     prompt = opt.s
@@ -335,12 +322,9 @@ def main():
 
     cls_ = ENGINES[engine]
     client = cls_(model=model, inst=inst)
-    if do_list:
-        client.list_models()
-    else:
-        if not prompt:
-            prompt = sys.stdin.read().strip()
-        client.send_prompt(prompt, outfile)
+    if not prompt:
+        prompt = sys.stdin.read().strip()
+    client.send_prompt(prompt, outfile)
 
 if __name__ == "__main__":
     main()

@@ -36,7 +36,7 @@
 (defvar chatgpt-default-engine "chatgpt")
 
 (defvar chatgpt-api-prog "~/src/chatgpt-el/chatgpt-api")
-(defvar chatgpt-default-api-engine "ollama")
+(defvar chatgpt-default-api-engine "llama")
 
 (defvar chatgpt-browser-prog "qutebrowser")
 (defvar chatgpt-browser-args '("--qt-flag" "remote-debugging-port=9000"))
@@ -68,7 +68,7 @@
 (defvar chatgpt-api-model-alist
   '(("chatgpt" . "gpt-5.4-mini")
     ("gemini" . "gemini-3-flash")
-    ("ollama" . "gemma4:26b")))
+    ("llama" . "default")))
 
 ;; (chatgpt--extract-models "model output\nfoo 1\nbar 2\n")
 
@@ -110,24 +110,14 @@ imagen-4.0-standard            $0.04    n/a      Medium       n/a
 gemini-3.1-flash-image-preview $0.067   $0.25    Fast         128k
 gemini-3-pro-image-preview     $0.134   $2       Medium       65k"))
 
-(defvar chatgpt-api-ollama-models
+(defvar chatgpt-api-llama-models
   (chatgpt--extract-models "\
-NAME                                                          ID              SIZE      MODIFIED
-qwen3.6:27b                                                   a50eda8ed977    17 GB     4 minutes ago
-qwen3-coder-30b-a3b-q4:latest                                 30b7981a1115    17 GB     4 days ago
-hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL    30b7981a1115    17 GB     4 days ago
-gemma4:26b                                                    5571076f3d70    17 GB     4 days ago
-hhao/qwen2.5-coder-tools:14b                                  8897bf4e1dc7    9.0 GB    8 days ago
-gpt-oss:20b                                                   17052f91a42e    13 GB     2 weeks ago
-gemma4:e4b                                                    c6eb396dbd59    9.6 GB    4 weeks ago
-qwen2.5-coder:7b
-qwen3:30b-a3b
-"))
+default"))
 
 (defvar chatgpt-api-models-alist
   '(("chatgpt" . chatgpt-api-chatgpt-models)
     ("gemini" . chatgpt-api-gemini-models)
-    ("ollama" .  chatgpt-api-ollama-models)))
+    ("llama" .  chatgpt-api-llama-models)))
 
 ;;; Internal Variables (Buffer Local)
 
